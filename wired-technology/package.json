@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:push": "npx prisma db push",donde 
+    "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio"
@@ -17,7 +17,7 @@
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jsonwebtoken": "^9.0.2",
-    "lucide-react": "^0.383.0",
+    "lucide-react": "^1.27.0",
     "mercadopago": "^2.0.15",
     "next": "^15.3.0",
     "react": "^19.0.0",
