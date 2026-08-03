@@ -30,7 +30,8 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
       {/* Subcategorías como chips */}
       {category.subcategories.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
-          {category.subcategories.map((sub) => (
+          {category.subcategories.map(
+  (sub: { id: string | number; name: string }) => (
             <span key={sub.id} className="font-mono text-xs bg-card border border-hair px-3 py-1.5 rounded-lg">
               {sub.name}
             </span>
