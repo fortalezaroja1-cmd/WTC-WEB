@@ -27,11 +27,22 @@ interface Props {
 }
 
 async function loadImageAsJpeg(url: string) {
+  const proxyUrl = `/api/catalog-image?url=${encodeURIComponent(url)}`;
   const optimizedUrl = `/_next/image?url=${encodeURIComponent(url)}&w=900&q=78`;
-  const response = await fetch(optimizedUrl);
-  if (!response.ok) throw new Error("No se pudo cargar la imagen");
+
+  let response = await fetch(proxyUrl, { cache: "no-store" });
+  if (!response.ok) {
+    response = await fetch(optimizedUrl, { cache: "no-store" });
+  }
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar la imagen (${response.status})`);
+  }
 
   const blob = await response.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("El archivo recibido no es una imagen");
+  }
+
   const objectUrl = URL.createObjectURL(blob);
 
   try {
@@ -60,7 +71,7 @@ async function loadImageAsJpeg(url: string) {
     ctx.drawImage(img, 0, 0, width, height);
 
     return {
-      data: canvas.toDataURL("image/jpeg", 0.82),
+      data: canvas.toDataURL("image/jpeg", 0.84),
       width,
       height,
     };
@@ -173,7 +184,8 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
             const imageX = x + (cardWidth - drawWidth) / 2;
             const imageY = y + 6 + (boxHeight - drawHeight) / 2;
             doc.addImage(image.data, "JPEG", imageX, imageY, drawWidth, drawHeight, undefined, "FAST");
-          } catch {
+          } catch (error) {
+            console.error(`Error agregando imagen al catálogo: ${product.sku}`, error);
             doc.setTextColor(107, 116, 128);
             doc.setFontSize(8);
             doc.text("Imagen no disponible", x + cardWidth / 2, y + 39, { align: "center" });
