@@ -1,12 +1,11 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { Plus, Edit3, Trash2, Check, ArrowLeft, Upload, X, Package } from "lucide-react";
+import { Plus, Edit3, Trash2, Check, ArrowLeft, Upload, X, Package, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
-import Image from "next/image";
 
 export default function ProductosAdmin() {
   const [products, setProducts] = useState<any[]>([]);
-  const [editing, setEditing] = useState<any | null>(null); // null=lista, "new"=nuevo, obj=editando
+  const [editing, setEditing] = useState<any | null>(null);
 
   useEffect(() => { loadProducts(); }, []);
 
@@ -50,8 +49,8 @@ export default function ProductosAdmin() {
                 <tr key={p.id} className="border-b border-hair hover:bg-paper/50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-paper flex items-center justify-center overflow-hidden shrink-0">
-                        {p.images?.[0]?.url ? <img src={p.images[0].url} alt="" className="w-full h-full object-cover" /> : <Package size={18} className="text-copper" />}
+                      <div className="w-10 h-10 rounded-lg bg-white border border-hair flex items-center justify-center overflow-hidden shrink-0">
+                        {p.images?.[0]?.url ? <img src={p.images[0].url} alt="" className="w-full h-full object-contain" /> : <Package size={18} className="text-copper" />}
                       </div>
                       <div>
                         <div className="font-semibold">{p.name}</div>
@@ -101,20 +100,48 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
 
   const set = (k: string, v: any) => setF((prev) => ({ ...prev, [k]: v }));
 
-  // Auto-slug
   useEffect(() => {
     if (isNew) set("slug", f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
   }, [f.name]);
 
   const uploadImage = async (file: File) => {
-    setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("sku", f.sku);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
     if (data.url) setImages((prev) => [...prev, { url: data.url, alt: f.name }]);
-    setUploading(false);
+  };
+
+  const uploadImages = async (files: FileList | File[]) => {
+    const selected = Array.from(files);
+    if (!selected.length) return;
+    setUploading(true);
+    try {
+      for (const file of selected) await uploadImage(file);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const makePrimary = (index: number) => {
+    if (index === 0) return;
+    setImages((prev) => {
+      const next = [...prev];
+      const [selected] = next.splice(index, 1);
+      return [selected, ...next];
+    });
+  };
+
+  const moveImage = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= images.length) return;
+    setImages((prev) => {
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const save = async () => {
@@ -124,7 +151,7 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
       ...(isNew ? {} : { id: product.id }),
       variants: variants.map(({ id, productId, createdAt, updatedAt, ...v }: any) => v),
       specs: specs.map(({ id, productId, ...s }: any) => s),
-      images: images.map(({ id, productId, createdAt, ...img }: any) => img),
+      images: images.map(({ id, productId, createdAt, order, ...img }: any) => img),
     };
     await fetch("/api/admin/products", {
       method: isNew ? "POST" : "PUT",
@@ -136,12 +163,12 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
   };
 
   return (
-    <div className="max-w-[760px]">
+    <div className="max-w-[860px]">
       <button onClick={onCancel} className="font-mono text-xs text-copper font-semibold inline-flex items-center gap-1 mb-4 hover:underline">
         <ArrowLeft size={13} /> VOLVER A PRODUCTOS
       </button>
       <h1 className="font-display text-xl font-bold mb-5">{isNew ? "Nuevo producto" : "Editar producto"}</h1>
-      <div className="bg-card border border-hair rounded-xl p-6 space-y-4">
+      <div className="bg-card border border-hair rounded-xl p-6 space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2"><label className="text-xs font-semibold text-slate-dark block mb-1">Nombre</label><input value={f.name} onChange={(e) => set("name", e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
           <div><label className="text-xs font-semibold text-slate-dark block mb-1">SKU</label><input value={f.sku} onChange={(e) => set("sku", e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-copper" /></div>
@@ -157,7 +184,6 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
           <div className="col-span-2"><label className="text-xs font-semibold text-slate-dark block mb-1">Descripción</label><textarea rows={2} value={f.description} onChange={(e) => set("description", e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
         </div>
 
-        {/* Precio/stock si no hay variantes */}
         {variants.length === 0 && (
           <div className="grid grid-cols-2 gap-4 bg-paper rounded-lg p-4">
             <div><label className="text-xs font-semibold text-slate-dark block mb-1">Precio</label><input type="number" value={f.price} onChange={(e) => set("price", +e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
@@ -165,29 +191,69 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
           </div>
         )}
 
-        {/* Imágenes */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold">Imágenes ({images.length})</span>
-            <button onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="text-xs font-semibold text-copper flex items-center gap-1 hover:underline">
-              <Upload size={13} /> {uploading ? "Subiendo..." : "Subir imagen"}
+        <div className="border border-hair rounded-xl p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div>
+              <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold">Imágenes ({images.length})</div>
+              <div className="text-xs text-muted mt-1">La primera imagen es la principal del catálogo. Puedes cambiarla sin eliminar las demás.</div>
+            </div>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="text-xs font-semibold text-copper border border-copper/30 rounded-lg px-3 py-2 flex items-center justify-center gap-1.5 hover:bg-copper/5 disabled:opacity-50">
+              <Upload size={14} /> {uploading ? "Subiendo..." : "Subir imágenes"}
             </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) uploadImage(e.target.files[0]); }} />
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files) uploadImages(e.target.files); }} />
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {images.map((img: any, i: number) => (
-              <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-hair">
-                <img src={img.url} alt="" className="w-full h-full object-cover" />
-                <button onClick={() => setImages((prev) => prev.filter((_, k) => k !== i))}
-                  className="absolute top-1 right-1 bg-white/80 rounded-full p-0.5"><X size={12} /></button>
+
+          {images.length > 0 ? (
+            <>
+              <div className="relative w-full aspect-square max-h-[430px] rounded-xl overflow-hidden border border-hair bg-white mb-4 flex items-center justify-center">
+                <img src={images[0].url} alt={images[0].alt || f.name} className="w-full h-full object-contain" />
+                <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-copper text-white px-3 py-1.5 text-[11px] font-semibold shadow-sm">
+                  <Star size={12} fill="currentColor" /> Imagen principal
+                </div>
               </div>
-            ))}
-            {images.length === 0 && <div className="text-xs text-muted py-4">Sin imágenes. Sube la primera foto del producto.</div>}
-          </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {images.map((img: any, i: number) => (
+                  <div key={`${img.url}-${i}`} className={`rounded-xl border overflow-hidden bg-white ${i === 0 ? "border-copper ring-1 ring-copper/30" : "border-hair"}`}>
+                    <div className="relative aspect-square bg-white">
+                      <img src={img.url} alt={img.alt || ""} className="w-full h-full object-contain" />
+                      <button type="button" onClick={() => setImages((prev) => prev.filter((_, k) => k !== i))}
+                        className="absolute top-2 right-2 bg-white/95 border border-hair rounded-full p-1 shadow-sm hover:text-alert" title="Eliminar imagen">
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div className="p-2 border-t border-hair">
+                      {i === 0 ? (
+                        <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-copper py-1.5">
+                          <Star size={12} fill="currentColor" /> Principal
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => makePrimary(i)}
+                          className="w-full rounded-md bg-graphite text-white text-[11px] font-semibold py-1.5 hover:bg-slate-dark transition-colors">
+                          Hacer principal
+                        </button>
+                      )}
+                      <div className="flex justify-center gap-1 mt-1.5">
+                        <button type="button" onClick={() => moveImage(i, -1)} disabled={i === 0}
+                          className="p-1 rounded border border-hair disabled:opacity-30 hover:border-copper" title="Mover a la izquierda"><ChevronLeft size={12} /></button>
+                        <button type="button" onClick={() => moveImage(i, 1)} disabled={i === images.length - 1}
+                          className="p-1 rounded border border-hair disabled:opacity-30 hover:border-copper" title="Mover a la derecha"><ChevronRight size={12} /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={() => fileRef.current?.click()} className="w-full border border-dashed border-hair rounded-xl py-12 text-center hover:border-copper transition-colors">
+              <Package size={36} className="text-copper mx-auto mb-2" />
+              <div className="text-sm font-semibold">Sube las fotos del producto</div>
+              <div className="text-xs text-muted mt-1">Puedes seleccionar varias al mismo tiempo.</div>
+            </button>
+          )}
         </div>
 
-        {/* Variantes */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold">Variantes ({variants.length})</span>
@@ -207,7 +273,6 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
           </div>
         </div>
 
-        {/* Specs */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold">Especificaciones ({specs.length})</span>
@@ -225,7 +290,6 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
           </div>
         </div>
 
-        {/* Destacado */}
         <label className="flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" checked={f.featured} onChange={(e) => set("featured", e.target.checked)} /> Producto destacado
         </label>
