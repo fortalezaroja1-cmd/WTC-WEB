@@ -14,6 +14,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { variants, specs, images, ...productData } = body;
 
+    // La subcategoría es opcional. El formulario usa "" cuando no hay una seleccionada,
+    // pero Prisma necesita null para una relación opcional.
+    if (productData.subcategoryId === "") productData.subcategoryId = null;
+
     const product = await prisma.product.create({
       data: {
         ...productData,
@@ -25,7 +29,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(product);
   } catch (err: any) {
-    console.error(err);
+    console.error("POST /api/admin/products error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
@@ -34,6 +38,9 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
     const { id, variants, specs, images, brand, category, subcategory, ...productData } = body;
+
+    // La subcategoría es opcional. Un string vacío viola la FK en PostgreSQL.
+    if (productData.subcategoryId === "") productData.subcategoryId = null;
 
     // Actualizar datos base
     await prisma.product.update({ where: { id }, data: productData });
@@ -64,10 +71,11 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.product.findUnique({
       where: { id },
-      include: { brand: true, category: true, variants: true, images: true, specs: true },
+      include: { brand: true, category: true, variants: true, images: { orderBy: { order: "asc" } }, specs: true },
     });
     return NextResponse.json(updated);
   } catch (err: any) {
+    console.error("PUT /api/admin/products error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
