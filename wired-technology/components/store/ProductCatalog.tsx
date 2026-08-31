@@ -55,12 +55,12 @@ async function loadImageAsJpeg(url: string) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("No se pudo preparar la imagen");
 
-    ctx.fillStyle = "#F3F4F6";
+    ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
 
     return {
-      data: canvas.toDataURL("image/jpeg", 0.8),
+      data: canvas.toDataURL("image/jpeg", 0.82),
       width,
       height,
     };
@@ -159,19 +159,19 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
         doc.setFillColor(255, 255, 255);
         doc.roundedRect(x, y, cardWidth, cardHeight, 2.5, 2.5, "FD");
 
-        doc.setFillColor(243, 244, 246);
-        doc.roundedRect(x + 5, y + 6, cardWidth - 10, 65, 2, 2, "F");
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(x + 3, y + 4, cardWidth - 6, 68, 2, 2, "F");
 
         if (product.image) {
           try {
             const image = await loadImageAsJpeg(product.image);
-            const boxWidth = cardWidth - 16;
-            const boxHeight = 57;
+            const boxWidth = cardWidth - 8;
+            const boxHeight = 64;
             const ratio = Math.min(boxWidth / image.width, boxHeight / image.height);
             const drawWidth = image.width * ratio;
             const drawHeight = image.height * ratio;
             const imageX = x + (cardWidth - drawWidth) / 2;
-            const imageY = y + 10 + (boxHeight - drawHeight) / 2;
+            const imageY = y + 6 + (boxHeight - drawHeight) / 2;
             doc.addImage(image.data, "JPEG", imageX, imageY, drawWidth, drawHeight, undefined, "FAST");
           } catch {
             doc.setTextColor(107, 116, 128);
@@ -326,25 +326,25 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                 key={product.id}
                 className="group overflow-hidden rounded-2xl border border-hair bg-card shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all"
               >
-                <div className="relative h-[300px] md:h-[330px] bg-gradient-to-br from-[#F8F5F0] to-[#ECE7DF] overflow-hidden">
+                <div className="relative h-[360px] md:h-[390px] bg-white border-b border-hair overflow-hidden">
                   {product.image ? (
                     <Image
                       src={product.image}
                       alt={product.name}
                       fill
-                      className="object-contain p-5 md:p-6 group-hover:scale-[1.03] transition-transform duration-300"
+                      className="object-contain group-hover:scale-[1.02] transition-transform duration-300"
                       sizes="(max-width:640px) 100vw, (max-width:1280px) 50vw, 33vw"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center justify-center bg-[#F8F5F0]">
                       <Package size={88} strokeWidth={0.8} className="text-copper/60" />
                     </div>
                   )}
 
-                  <span className="absolute left-4 top-4 rounded-md bg-graphite/90 px-2.5 py-1 font-mono text-[10px] text-white">
+                  <span className="absolute left-4 top-4 rounded-md bg-graphite/90 px-2.5 py-1 font-mono text-[10px] text-white shadow-sm">
                     {product.category}
                   </span>
-                  <span className="absolute right-4 top-4 rounded-md border border-white/70 bg-white/90 px-2.5 py-1 font-mono text-[10px] text-slate-dark">
+                  <span className="absolute right-4 top-4 rounded-md border border-hair bg-white/95 px-2.5 py-1 font-mono text-[10px] text-slate-dark shadow-sm">
                     {product.brand}
                   </span>
                 </div>
