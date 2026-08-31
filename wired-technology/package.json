@@ -17,6 +17,7 @@
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jsonwebtoken": "^9.0.2",
+    "jspdf": "^3.0.2",
     "lucide-react": "^1.27.0",
     "mercadopago": "^2.0.15",
     "next": "^15.3.0",
