@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { AddToCart } from "@/components/store/AddToCart";
+import { ProductGallery } from "@/components/store/ProductGallery";
 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -30,30 +30,25 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
   const mainImage = product.images[0]?.url || null;
 
   return (
-    <div className="max-w-[1180px] mx-auto px-5 py-7">
+    <div className="max-w-[1240px] mx-auto px-5 py-7">
       <Link href={`/categorias/${product.category.slug}`}
         className="font-mono text-xs text-copper font-semibold inline-flex items-center gap-1 mb-4 hover:underline">
         <ArrowLeft size={13} /> {product.category.name}
       </Link>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* Imagen */}
-        <div className="bg-gradient-to-br from-[#F6F1EB] to-[#E9E3DB] rounded-xl flex items-center justify-center min-h-[380px] relative overflow-hidden">
-          {mainImage ? (
-            <Image src={mainImage} alt={product.name} fill className="object-contain p-8" sizes="(max-width:768px) 100vw, 50vw" />
-          ) : (
-            <Package size={150} strokeWidth={0.8} className="text-copper" />
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-[1.08fr_.92fr] gap-10 lg:gap-14 items-start">
+        <ProductGallery
+          productName={product.name}
+          images={product.images.map((image) => ({ url: image.url, alt: image.alt }))}
+        />
 
-        {/* Info */}
-        <div>
+        <div className="md:sticky md:top-24">
           <span className="font-mono text-[11px] bg-[#F0EDE8] text-slate-dark px-2 py-0.5 rounded-md font-medium">
             {product.brand.name}
           </span>
           <div className="font-mono text-xs text-muted mt-3 mb-1.5">{product.sku}</div>
-          <h1 className="font-display text-[28px] font-bold leading-tight mb-3">{product.name}</h1>
-          <p className="text-[14.5px] text-slate-dark mb-5">{product.description}</p>
+          <h1 className="font-display text-[30px] md:text-[34px] font-bold leading-tight mb-3">{product.name}</h1>
+          <p className="text-[14.5px] leading-relaxed text-slate-dark mb-5">{product.description}</p>
 
           <AddToCart
             productId={product.id}
@@ -70,7 +65,6 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
             whatsapp={whatsapp}
           />
 
-          {/* Especificaciones */}
           {product.specs.length > 0 && (
             <div className="mt-8">
               <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold mb-2.5">
