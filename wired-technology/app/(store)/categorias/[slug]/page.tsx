@@ -20,7 +20,7 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
   });
 
   return (
-    <div className="max-w-[1180px] mx-auto px-5 py-7">
+    <div className="max-w-[1380px] mx-auto px-5 py-7">
       <Link href="/" className="font-mono text-xs text-copper font-semibold inline-flex items-center gap-1 mb-3 hover:underline">
         <ArrowLeft size={13} /> INICIO
       </Link>
@@ -30,8 +30,7 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
       {/* Subcategorías como chips */}
       {category.subcategories.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
-          {category.subcategories.map(
-  (sub: { id: string | number; name: string }) => (
+          {category.subcategories.map((sub: { id: string | number; name: string }) => (
             <span key={sub.id} className="font-mono text-xs bg-card border border-hair px-3 py-1.5 rounded-lg">
               {sub.name}
             </span>
@@ -39,7 +38,7 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         {products.length === 0 && (
           <div className="col-span-full text-center py-16 text-muted">No hay productos en esta categoría.</div>
         )}
