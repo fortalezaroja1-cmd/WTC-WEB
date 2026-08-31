@@ -2,7 +2,7 @@
 
 Tienda e-commerce con panel administrativo para distribución de cables Centelsa, iluminación LED y accesorios Mercury.
 
-> GitHub y Vercel sincronizados para despliegues automáticos desde `main`.
+> GitHub y Vercel sincronizados para despliegues automáticos desde `main`. Root Directory en Vercel: `wired-technology`.
 
 ## Stack
 
