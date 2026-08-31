@@ -1,9 +1,11 @@
 "use client";
+
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, MessageCircle } from "lucide-react";
 
-export default function ConfirmacionPage() {
+function ConfirmationContent() {
   const params = useSearchParams();
   const orderNumber = params.get("order") || "—";
   const waMsg = `Hola Wired Technology, confirmo mi pedido ${orderNumber}. ¿Cómo hago el pago?`;
@@ -20,15 +22,35 @@ export default function ConfirmacionPage() {
         <p className="text-sm text-slate-dark mb-6">
           Para confirmar el pago y coordinar el envío, escríbenos por WhatsApp.
         </p>
-        <a href={waUrl} target="_blank" rel="noreferrer"
-          className="w-full bg-green text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mb-3">
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="w-full bg-green text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mb-3"
+        >
           <MessageCircle size={17} /> Confirmar por WhatsApp
         </a>
-        <Link href="/"
-          className="w-full border border-hair font-semibold py-3 rounded-lg flex items-center justify-center hover:border-copper transition-colors text-sm">
+        <Link
+          href="/"
+          className="w-full border border-hair font-semibold py-3 rounded-lg flex items-center justify-center hover:border-copper transition-colors text-sm"
+        >
           Seguir comprando
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function ConfirmacionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-[560px] mx-auto px-5 py-16 text-center text-muted">
+          Cargando confirmación...
+        </div>
+      }
+    >
+      <ConfirmationContent />
+    </Suspense>
   );
 }
