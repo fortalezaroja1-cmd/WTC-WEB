@@ -85,7 +85,7 @@ export default async function HomePage() {
         <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold flex items-center gap-1.5">
           <Star size={11} /> Más vendidos
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mt-4">
           {featuredProducts.map((p) => {
             const hasVars = p.variants.length > 0;
             const minPrice = hasVars ? Math.min(...p.variants.map((v) => Number(v.price))) : Number(p.price) || 0;
