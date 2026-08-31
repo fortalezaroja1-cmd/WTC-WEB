@@ -2,6 +2,8 @@
 
 Tienda e-commerce con panel administrativo para distribución de cables Centelsa, iluminación LED y accesorios Mercury.
 
+> GitHub y Vercel sincronizados para despliegues automáticos desde `main`.
+
 ## Stack
 
 - **Framework:** Next.js 15 (App Router)
