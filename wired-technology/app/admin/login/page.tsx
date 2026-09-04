@@ -40,7 +40,7 @@ export default function AdminLoginPage() {
             <label className="text-xs font-semibold text-slate-dark block mb-1">Contraseña</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              placeholder="admin123"
+              placeholder="Ingresa tu contraseña"
               className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" />
           </div>
           {error && <p className="text-alert text-xs mb-2">{error}</p>}
@@ -48,7 +48,6 @@ export default function AdminLoginPage() {
             className="w-full bg-copper text-white font-semibold py-3 rounded-lg mt-3 hover:bg-copper-bright transition-colors">
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
-          <p className="font-mono text-[10px] text-muted text-center mt-3">Contraseña inicial: admin123</p>
         </div>
         <Link href="/" className="flex items-center justify-center gap-1.5 text-muted text-sm mt-4 hover:text-copper transition-colors">
           <ArrowLeft size={14} /> Volver a la tienda
