@@ -29,11 +29,13 @@ const FILTERS = [
   { id: "UNREAD", label: "No leído", icon: EyeOff },
 ] as const;
 
+type FilterId = (typeof FILTERS)[number]["id"];
+
 export default function InboxPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("ALL");
+  const [filter, setFilter] = useState<FilterId>("ALL");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"HUMAN" | "AUTO">("HUMAN");
@@ -72,11 +74,11 @@ export default function InboxPage() {
       if (filter === "FOLLOWUP" && !["READY", "APPROVED"].includes(o.shipStatus)) return false;
       if (filter === "UNREAD" && o.shipStatus !== "PENDING_PAYMENT") return false;
       if (!text) return true;
-      const haystack = [o.number, o.customer?.name, o.customer?.phone, o.customer?.city, o.workflow?.origin]
+      return [o.number, o.customer?.name, o.customer?.phone, o.customer?.city, o.workflow?.origin]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase();
-      return haystack.includes(text);
+        .toLowerCase()
+        .includes(text);
     });
   }, [orders, filter, query]);
 
@@ -101,126 +103,164 @@ export default function InboxPage() {
     }
   };
 
-  const lastActivity = (o: any) => {
-    const h = (o.history || [])[0];
-    return h?.action || `Pedido ${o.number}`;
+  const lastActivity = (order: any) => {
+    const history = order.history || [];
+    return history[0]?.action || `Pedido ${order.number}`;
   };
 
   return (
-    <div className="-m-7 h-[calc(100vh-0px)] min-h-[680px] bg-white border-t border-hair flex overflow-hidden">
-      <aside className="w-[205px] border-r border-hair bg-[#F8F9FA] shrink-0 flex flex-col">
-        <div className="px-4 py-4 border-b border-hair">
+    <div className="-m-7 h-screen min-h-[680px] bg-white border-t border-hair overflow-hidden grid grid-cols-[180px_minmax(260px,320px)_minmax(0,1fr)] xl:grid-cols-[190px_minmax(280px,340px)_minmax(0,1fr)_300px] 2xl:grid-cols-[205px_360px_minmax(0,1fr)_320px]">
+      <aside className="min-w-0 border-r border-hair bg-[#F8F9FA] flex flex-col overflow-hidden">
+        <div className="px-4 py-4 border-b border-hair shrink-0">
           <div className="font-display font-bold text-base">Bandeja</div>
           <div className="text-[11px] text-muted mt-0.5">Clientes y pedidos</div>
         </div>
-        <div className="p-2.5 space-y-1">
+
+        <div className="p-2.5 space-y-1 overflow-y-auto">
           {FILTERS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setFilter(id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${filter === id ? "bg-white border border-hair shadow-sm font-semibold" : "hover:bg-white"}`}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${
+                filter === id ? "bg-white border border-hair shadow-sm font-semibold" : "hover:bg-white"
+              }`}
             >
-              <Icon size={15} className={filter === id ? "text-copper" : "text-muted"} />
-              <span className="flex-1">{label}</span>
+              <Icon size={15} className={filter === id ? "text-copper shrink-0" : "text-muted shrink-0"} />
+              <span className="flex-1 truncate">{label}</span>
               <span className="font-mono text-[10px] text-muted">{counts[id]}</span>
             </button>
           ))}
         </div>
-        <div className="mt-auto p-3 border-t border-hair">
+
+        <div className="mt-auto p-3 border-t border-hair shrink-0">
           <Link href="/admin/crm" className="text-xs font-semibold text-copper flex items-center gap-1 hover:underline">
             Ver pipeline <ChevronRight size={12} />
           </Link>
         </div>
       </aside>
 
-      <section className="w-[390px] border-r border-hair shrink-0 flex flex-col bg-white">
-        <div className="p-3 border-b border-hair space-y-2.5">
+      <section className="min-w-0 border-r border-hair flex flex-col bg-white overflow-hidden">
+        <div className="p-3 border-b border-hair space-y-2.5 shrink-0">
           <div className="flex items-center gap-2">
-            <button onClick={() => setMode("HUMAN")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${mode === "HUMAN" ? "border-copper bg-copper/5 text-copper" : "border-hair text-muted"}`}>Humano</button>
-            <button onClick={() => setMode("AUTO")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${mode === "AUTO" ? "border-copper bg-copper/5 text-copper" : "border-hair text-muted"}`}>Automático</button>
+            <button
+              onClick={() => setMode("HUMAN")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                mode === "HUMAN" ? "border-copper bg-copper/5 text-copper" : "border-hair text-muted"
+              }`}
+            >
+              Humano
+            </button>
+            <button
+              onClick={() => setMode("AUTO")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                mode === "AUTO" ? "border-copper bg-copper/5 text-copper" : "border-hair text-muted"
+              }`}
+            >
+              Automático
+            </button>
           </div>
+
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar cliente, teléfono, pedido..."
-              className="w-full border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-copper"
+              className="w-full min-w-0 border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-copper"
             />
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 min-h-0">
           {mode === "AUTO" && (
             <div className="m-3 border border-dashed border-hair rounded-lg p-4 text-xs text-muted">
               Los mensajes automáticos aparecerán aquí cuando conectemos los canales de Meta.
             </div>
           )}
-          {mode === "HUMAN" && filtered.map((o) => {
-            const active = selected === o.id;
-            return (
-              <button
-                key={o.id}
-                onClick={() => openConversation(o)}
-                className={`w-full text-left px-4 py-3.5 border-b border-hair hover:bg-paper/60 transition-colors ${active ? "bg-[#F2F5F7] border-l-2 border-l-copper" : ""}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#E9EDF1] flex items-center justify-center shrink-0 text-muted"><UserRound size={18}/></div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-semibold text-[13px] truncate">{o.customer?.name || "Cliente sin nombre"}</div>
-                      <div className="font-mono text-[9px] text-muted whitespace-nowrap">{timeAgo(o.createdAt)}</div>
+
+          {mode === "HUMAN" &&
+            filtered.map((order) => {
+              const active = selected === order.id;
+              return (
+                <button
+                  key={order.id}
+                  onClick={() => openConversation(order)}
+                  className={`w-full text-left px-4 py-3.5 border-b border-hair hover:bg-paper/60 transition-colors ${
+                    active ? "bg-[#F2F5F7] border-l-2 border-l-copper" : ""
+                  }`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-[#E9EDF1] flex items-center justify-center shrink-0 text-muted">
+                      <UserRound size={18} />
                     </div>
-                    <div className="text-[11px] text-muted truncate mt-1">{lastActivity(o)}</div>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className="text-[9px] rounded-full bg-paper px-2 py-1 text-muted">{o.workflow?.origin || "Web"}</span>
-                      {o.shipStatus === "PENDING_PAYMENT" && <span className="w-2 h-2 rounded-full bg-copper" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="font-semibold text-[13px] truncate min-w-0">{order.customer?.name || "Cliente sin nombre"}</div>
+                        <div className="font-mono text-[9px] text-muted whitespace-nowrap shrink-0">{timeAgo(order.createdAt)}</div>
+                      </div>
+                      <div className="text-[11px] text-muted truncate mt-1">{lastActivity(order)}</div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className="text-[9px] rounded-full bg-paper px-2 py-1 text-muted truncate max-w-[120px]">
+                          {order.workflow?.origin || "Web"}
+                        </span>
+                        {order.shipStatus === "PENDING_PAYMENT" && <span className="w-2 h-2 rounded-full bg-copper shrink-0" />}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+
           {mode === "HUMAN" && filtered.length === 0 && (
             <div className="p-8 text-center text-xs text-muted">No hay conversaciones para este filtro.</div>
           )}
         </div>
       </section>
 
-      <main className="flex-1 min-w-[430px] flex flex-col bg-[#FAFBFC]">
+      <main className="min-w-0 flex flex-col bg-[#FAFBFC] overflow-hidden">
         {!current ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-8 text-muted">
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-6 text-muted min-w-0">
             <MessageCircle size={42} strokeWidth={1.2} className="mb-3" />
             <div className="font-semibold text-slate-dark">Selecciona una conversación</div>
-            <div className="text-xs mt-1 max-w-[360px]">Aquí verás el historial comercial del cliente y, cuando conectemos Meta, los mensajes reales del canal.</div>
+            <div className="text-xs mt-1 max-w-[360px]">
+              Aquí verás el historial comercial del cliente y, cuando conectemos Meta, los mensajes reales del canal.
+            </div>
           </div>
         ) : (
           <>
-            <header className="h-[72px] px-5 border-b border-hair bg-white flex items-center justify-between gap-3">
+            <header className="h-[72px] px-4 xl:px-5 border-b border-hair bg-white flex items-center justify-between gap-3 shrink-0 min-w-0">
               <div className="min-w-0">
                 <div className="font-semibold truncate">{current.customer?.name}</div>
-                <div className="text-[11px] text-muted mt-0.5">{current.workflow?.assignedSellerName ? `Asignado a ${current.workflow.assignedSellerName}` : "Sin vendedor asignado"}</div>
+                <div className="text-[11px] text-muted mt-0.5 truncate">
+                  {current.workflow?.assignedSellerName ? `Asignado a ${current.workflow.assignedSellerName}` : "Sin vendedor asignado"}
+                </div>
               </div>
               <a
                 href={waLink(current.customer?.phone || "", `Hola ${current.customer?.name || ""}, te escribimos de Wired Technology sobre tu pedido ${current.number}.`)}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 bg-green text-white rounded-lg px-3 py-2 text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 bg-green text-white rounded-lg px-3 py-2 text-xs font-semibold shrink-0"
               >
-                <MessageCircle size={14}/> WhatsApp
+                <MessageCircle size={14} /> <span className="hidden 2xl:inline">WhatsApp</span>
               </a>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 xl:p-6">
               <div className="text-center text-[10px] uppercase tracking-wider text-muted mb-5">Historial comercial</div>
-              <div className="space-y-3 max-w-[720px] mx-auto">
-                {[...(current.history || [])].reverse().map((h: any, i: number) => {
-                  const admin = h.actor === "admin";
+              <div className="space-y-3 max-w-[720px] mx-auto min-w-0">
+                {[...(current.history || [])].reverse().map((history: any, index: number) => {
+                  const admin = history.actor === "admin";
                   return (
-                    <div key={h.id || i} className={`flex ${admin ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm border ${admin ? "bg-[#FFF7F0] border-copper/20" : "bg-white border-hair"}`}>
-                        <div>{h.action}</div>
-                        <div className="text-[9px] text-muted mt-1.5">{h.createdAt ? new Date(h.createdAt).toLocaleString("es-CO") : ""}</div>
+                    <div key={history.id || index} className={`flex ${admin ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm border break-words ${
+                          admin ? "bg-[#FFF7F0] border-copper/20" : "bg-white border-hair"
+                        }`}
+                      >
+                        <div>{history.action}</div>
+                        <div className="text-[9px] text-muted mt-1.5">
+                          {history.createdAt ? new Date(history.createdAt).toLocaleString("es-CO") : ""}
+                        </div>
                       </div>
                     </div>
                   );
@@ -231,9 +271,9 @@ export default function InboxPage() {
               </div>
             </div>
 
-            <div className="border-t border-hair bg-white p-4">
-              <div className="border border-hair rounded-xl px-4 py-3 text-xs text-muted flex items-center justify-between gap-3">
-                <span>Mensajería directa pendiente de conexión con Meta.</span>
+            <div className="border-t border-hair bg-white p-3 xl:p-4 shrink-0">
+              <div className="border border-hair rounded-xl px-3 xl:px-4 py-3 text-xs text-muted flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0">Mensajería directa pendiente de conexión con Meta.</span>
                 <span className="font-semibold text-copper whitespace-nowrap">Pago en casa activo</span>
               </div>
             </div>
@@ -241,25 +281,29 @@ export default function InboxPage() {
         )}
       </main>
 
-      <aside className="w-[330px] border-l border-hair bg-white shrink-0 overflow-y-auto">
+      <aside className="hidden xl:block min-w-0 border-l border-hair bg-white overflow-y-auto">
         {!current ? (
-          <div className="h-full flex items-center justify-center text-xs text-muted p-6 text-center">La ficha del contacto aparecerá aquí.</div>
+          <div className="h-full flex items-center justify-center text-xs text-muted p-5 text-center">
+            La ficha del contacto aparecerá aquí.
+          </div>
         ) : (
-          <div>
-            <div className="p-5 border-b border-hair text-center">
-              <div className="w-20 h-20 rounded-full bg-[#E9EDF1] mx-auto flex items-center justify-center text-muted"><UserRound size={34}/></div>
-              <div className="font-semibold mt-3">{current.customer?.name}</div>
-              <div className="text-[11px] text-muted mt-1">{current.number}</div>
+          <div className="min-w-0">
+            <div className="p-4 2xl:p-5 border-b border-hair text-center">
+              <div className="w-16 h-16 2xl:w-20 2xl:h-20 rounded-full bg-[#E9EDF1] mx-auto flex items-center justify-center text-muted">
+                <UserRound size={32} />
+              </div>
+              <div className="font-semibold mt-3 break-words">{current.customer?.name}</div>
+              <div className="text-[11px] text-muted mt-1 break-all">{current.number}</div>
             </div>
 
-            <div className="p-5 space-y-5">
-              <section className="space-y-2.5 text-xs">
-                <InfoRow icon={Phone} label="Teléfono" value={current.customer?.phone || "—"}/>
-                <InfoRow icon={Mail} label="Email" value={current.customer?.email || "—"}/>
-                <InfoRow icon={MapPin} label="Ciudad" value={current.customer?.city || "—"}/>
+            <div className="p-4 2xl:p-5 space-y-5 min-w-0">
+              <section className="space-y-2.5 text-xs min-w-0">
+                <InfoRow icon={Phone} label="Teléfono" value={current.customer?.phone || "—"} />
+                <InfoRow icon={Mail} label="Email" value={current.customer?.email || "—"} />
+                <InfoRow icon={MapPin} label="Ciudad" value={current.customer?.city || "—"} />
               </section>
 
-              <section>
+              <section className="min-w-0">
                 <div className="text-[11px] font-semibold mb-2">Responsable</div>
                 <select
                   disabled={busy}
@@ -268,32 +312,41 @@ export default function InboxPage() {
                     const seller = sellers.find((s) => s.id === e.target.value);
                     update(current.id, { assignedSellerId: seller?.id || "", assignedSellerName: seller?.name || "" });
                   }}
-                  className="w-full border border-hair rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-copper"
+                  className="w-full min-w-0 border border-hair rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-copper"
                 >
                   <option value="">Sin asignar</option>
-                  {sellers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {sellers.map((seller) => (
+                    <option key={seller.id} value={seller.id}>
+                      {seller.name}
+                    </option>
+                  ))}
                 </select>
               </section>
 
               <section>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-semibold">Etiquetas</div>
-                </div>
+                <div className="text-[11px] font-semibold mb-2">Etiquetas</div>
                 <div className="flex flex-wrap gap-1.5">
-                  <Pill icon={Tag} text={current.workflow?.origin || "Web"}/>
-                  <Pill icon={CheckCircle2} text="Contraentrega"/>
-                  {current.workflow?.stockValidated ? <Pill icon={CheckCircle2} text="Stock OK"/> : <Pill icon={Circle} text="Stock pendiente"/>}
+                  <Pill icon={Tag} text={current.workflow?.origin || "Web"} />
+                  <Pill icon={CheckCircle2} text="Contraentrega" />
+                  {current.workflow?.stockValidated ? (
+                    <Pill icon={CheckCircle2} text="Stock OK" />
+                  ) : (
+                    <Pill icon={Circle} text="Stock pendiente" />
+                  )}
                 </div>
               </section>
 
               <section>
                 <div className="text-[11px] font-semibold mb-2">Pipeline</div>
-                <Link href="/admin/crm" className="border border-hair rounded-lg p-3 flex items-center justify-between gap-2 hover:border-copper transition-colors">
-                  <div>
-                    <div className="text-xs font-semibold">{SHIP_LABELS[current.shipStatus] || current.shipStatus}</div>
-                    <div className="text-[10px] text-muted mt-0.5">{formatCOP(Number(current.total))}</div>
+                <Link
+                  href="/admin/crm"
+                  className="border border-hair rounded-lg p-3 flex items-center justify-between gap-2 hover:border-copper transition-colors min-w-0"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate">{SHIP_LABELS[current.shipStatus] || current.shipStatus}</div>
+                    <div className="text-[10px] text-muted mt-0.5 truncate">{formatCOP(Number(current.total))}</div>
                   </div>
-                  <ChevronRight size={14} className="text-muted"/>
+                  <ChevronRight size={14} className="text-muted shrink-0" />
                 </Link>
               </section>
 
@@ -305,7 +358,7 @@ export default function InboxPage() {
                   onBlur={(e) => update(current.id, { internalNote: e.target.value })}
                   rows={4}
                   placeholder="Añadir nota del vendedor..."
-                  className="w-full border border-hair rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-copper"
+                  className="w-full min-w-0 border border-hair rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-copper"
                 />
               </section>
 
@@ -316,7 +369,7 @@ export default function InboxPage() {
                   rel="noreferrer"
                   className="w-full border border-hair rounded-lg px-3 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-copper"
                 >
-                  Abrir contacto <ExternalLink size={13}/>
+                  Abrir contacto <ExternalLink size={13} />
                 </a>
               </section>
             </div>
@@ -329,16 +382,21 @@ export default function InboxPage() {
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-2">
-      <Icon size={13} className="text-muted mt-0.5 shrink-0"/>
-      <div className="min-w-0">
+    <div className="flex items-start gap-2 min-w-0">
+      <Icon size={13} className="text-muted mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
         <div className="text-[10px] text-muted">{label}</div>
-        <div className="text-xs text-slate-dark break-words">{value}</div>
+        <div className="text-xs text-slate-dark break-words overflow-hidden">{value}</div>
       </div>
     </div>
   );
 }
 
 function Pill({ icon: Icon, text }: { icon: any; text: string }) {
-  return <span className="inline-flex items-center gap-1 bg-paper rounded-full px-2.5 py-1 text-[10px] text-slate-dark"><Icon size={10}/>{text}</span>;
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 bg-paper rounded-full px-2.5 py-1 text-[10px] text-slate-dark">
+      <Icon size={10} className="shrink-0" />
+      <span className="truncate">{text}</span>
+    </span>
+  );
 }
