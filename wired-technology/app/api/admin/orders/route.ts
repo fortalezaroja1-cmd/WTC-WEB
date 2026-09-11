@@ -1,35 +1,264 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+type OrderMeta = {
+  requestId: string;
+  origin: string;
+  assignedSellerId: string | null;
+  assignedSellerName: string | null;
+  internalNote: string;
+  stockValidated: boolean;
+  inventoryApplied: boolean;
+};
+
+const DEFAULT_META: OrderMeta = {
+  requestId: "",
+  origin: "Web",
+  assignedSellerId: null,
+  assignedSellerName: null,
+  internalNote: "",
+  stockValidated: false,
+  inventoryApplied: false,
+};
+
+function parseNotes(notes: string | null) {
+  const raw = notes || "";
+  const match = raw.match(/\[WT_META\]([\s\S]*?)\[\/WT_META\]/);
+  let meta = { ...DEFAULT_META };
+  if (match?.[1]) {
+    try { meta = { ...meta, ...JSON.parse(match[1]) }; } catch {}
+  }
+  const publicNotes = raw.replace(/\[WT_META\][\s\S]*?\[\/WT_META\]\s*/, "").trim();
+  return { meta, publicNotes };
+}
+
+function buildNotes(meta: OrderMeta, publicNotes: string) {
+  return `[WT_META]${JSON.stringify(meta)}[/WT_META]${publicNotes ? `\n${publicNotes}` : ""}`;
+}
+
+function enrich(order: any) {
+  const { meta, publicNotes } = parseNotes(order.notes);
+  return { ...order, workflow: meta, publicNotes };
+}
+
+function getAvailability(order: any) {
+  return order.items.map((it: any) => {
+    const available = it.variantId ? it.variant?.stock : it.productId ? it.product?.stock : null;
+    return {
+      id: it.id,
+      name: it.name,
+      sku: it.sku,
+      requested: it.qty,
+      available,
+      ok: available !== null && available >= it.qty,
+    };
+  });
+}
+
 export async function GET() {
   const orders = await prisma.order.findMany({
-    include: { customer: true, items: true, history: { orderBy: { createdAt: "desc" } } },
+    include: {
+      customer: true,
+      items: {
+        include: {
+          product: { select: { stock: true } },
+          variant: { select: { stock: true } },
+        },
+      },
+      history: { orderBy: { createdAt: "desc" } },
+    },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json(orders);
+  return NextResponse.json(orders.map(enrich));
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, paymentStatus, shipStatus, guide, notes } = await req.json();
+  try {
+    const body = await req.json();
+    const { id, paymentStatus, shipStatus, guide, publicNotes, assignedSellerId, assignedSellerName, internalNote, action } = body;
 
-  const data: any = {};
-  const historyEntries: string[] = [];
+    if (!id) return NextResponse.json({ error: "Pedido requerido" }, { status: 400 });
 
-  if (paymentStatus) { data.paymentStatus = paymentStatus; historyEntries.push(`Pago: ${paymentStatus}`); }
-  if (shipStatus) { data.shipStatus = shipStatus; historyEntries.push(`Envío: ${shipStatus}`); }
-  if (guide !== undefined) { data.guide = guide; if (guide) historyEntries.push(`Guía: ${guide}`); }
-  if (notes !== undefined) { data.notes = notes; }
+    if (action === "validate-stock") {
+      const current = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+          history: { orderBy: { createdAt: "desc" } },
+        },
+      });
+      if (!current) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
 
-  const order = await prisma.order.update({
-    where: { id },
-    data: {
-      ...data,
-      history: historyEntries.length ? {
-        create: historyEntries.map((action) => ({ action, actor: "admin" })),
-      } : undefined,
-    },
-    include: { customer: true, items: true, history: { orderBy: { createdAt: "desc" } } },
-  });
+      const availability = getAvailability(current);
+      const shortages = availability.filter((x: any) => !x.ok);
+      const { meta, publicNotes: visible } = parseNotes(current.notes);
 
-  return NextResponse.json(order);
+      if (shortages.length) {
+        if (meta.stockValidated) {
+          meta.stockValidated = false;
+          await prisma.order.update({ where: { id }, data: { notes: buildNotes(meta, visible) } });
+        }
+        return NextResponse.json({ error: "Stock insuficiente o producto sin inventario vinculado", shortages, availability }, { status: 409 });
+      }
+
+      meta.stockValidated = true;
+      const updated = await prisma.order.update({
+        where: { id },
+        data: {
+          notes: buildNotes(meta, visible),
+          history: { create: { action: "Stock validado", actor: "admin" } },
+        },
+        include: {
+          customer: true,
+          items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+          history: { orderBy: { createdAt: "desc" } },
+        },
+      });
+      return NextResponse.json({ ...enrich(updated), availability });
+    }
+
+    if (action === "confirm") {
+      const confirmed = await prisma.$transaction(async (tx) => {
+        // Evita doble descuento si dos confirmaciones llegan casi al mismo tiempo.
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(57392027)");
+        const current = await tx.order.findUnique({
+          where: { id },
+          include: {
+            customer: true,
+            items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+            history: { orderBy: { createdAt: "desc" } },
+          },
+        });
+        if (!current) throw new Error("NOT_FOUND");
+
+        const parsed = parseNotes(current.notes);
+        const meta = parsed.meta;
+        const availability = getAvailability(current);
+        const shortages = availability.filter((x: any) => !x.ok);
+
+        if (!meta.inventoryApplied && shortages.length) {
+          const err: any = new Error("STOCK_SHORTAGE");
+          err.shortages = shortages;
+          throw err;
+        }
+
+        if (!meta.inventoryApplied) {
+          for (const it of current.items) {
+            if (it.variantId) {
+              await tx.variant.update({ where: { id: it.variantId }, data: { stock: { decrement: it.qty } } });
+              await tx.stockMovement.create({
+                data: { type: "SALE", qty: -it.qty, reason: `Reserva pedido ${current.number}`, productId: it.productId, variantId: it.variantId, actor: "admin" },
+              });
+            } else if (it.productId) {
+              await tx.product.update({ where: { id: it.productId }, data: { stock: { decrement: it.qty } } });
+              await tx.stockMovement.create({
+                data: { type: "SALE", qty: -it.qty, reason: `Reserva pedido ${current.number}`, productId: it.productId, actor: "admin" },
+              });
+            }
+          }
+        }
+
+        meta.stockValidated = true;
+        meta.inventoryApplied = true;
+        const updated = await tx.order.update({
+          where: { id },
+          data: {
+            shipStatus: "APPROVED",
+            notes: buildNotes(meta, parsed.publicNotes),
+            history: { create: { action: "Pedido confirmado e inventario reservado", actor: "admin" } },
+          },
+          include: {
+            customer: true,
+            items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+            history: { orderBy: { createdAt: "desc" } },
+          },
+        });
+        await tx.notification.create({ type: "order_confirmed", message: `Pedido ${current.number} confirmado` } as any);
+        return updated;
+      });
+
+      return NextResponse.json(enrich(confirmed));
+    }
+
+    const current = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!current) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
+
+    const parsed = parseNotes(current.notes);
+    const meta = parsed.meta;
+    let visible = publicNotes !== undefined ? String(publicNotes || "") : parsed.publicNotes;
+    const data: any = {};
+    const historyEntries: string[] = [];
+
+    if (paymentStatus) { data.paymentStatus = paymentStatus; historyEntries.push(`Pago: ${paymentStatus}`); }
+    if (shipStatus) { data.shipStatus = shipStatus; historyEntries.push(`Estado: ${shipStatus}`); }
+    if (guide !== undefined) { data.guide = guide; if (guide) historyEntries.push(`Guía: ${guide}`); }
+    if (assignedSellerId !== undefined) {
+      meta.assignedSellerId = assignedSellerId || null;
+      meta.assignedSellerName = assignedSellerName || null;
+      historyEntries.push(meta.assignedSellerName ? `Asignado a ${meta.assignedSellerName}` : "Pedido sin vendedor asignado");
+    }
+    if (internalNote !== undefined) meta.internalNote = String(internalNote || "");
+
+    // Si se cancela una orden ya confirmada, liberamos automáticamente el inventario reservado.
+    if (shipStatus === "CANCELLED" && meta.inventoryApplied) {
+      const cancelled = await prisma.$transaction(async (tx) => {
+        for (const it of current.items) {
+          if (it.variantId) {
+            await tx.variant.update({ where: { id: it.variantId }, data: { stock: { increment: it.qty } } });
+            await tx.stockMovement.create({
+              data: { type: "RETURN", qty: it.qty, reason: `Liberación pedido cancelado ${current.number}`, productId: it.productId, variantId: it.variantId, actor: "admin" },
+            });
+          } else if (it.productId) {
+            await tx.product.update({ where: { id: it.productId }, data: { stock: { increment: it.qty } } });
+            await tx.stockMovement.create({
+              data: { type: "RETURN", qty: it.qty, reason: `Liberación pedido cancelado ${current.number}`, productId: it.productId, actor: "admin" },
+            });
+          }
+        }
+        meta.inventoryApplied = false;
+        meta.stockValidated = false;
+        return tx.order.update({
+          where: { id },
+          data: {
+            ...data,
+            notes: buildNotes(meta, visible),
+            history: { create: [...historyEntries, "Inventario liberado por cancelación"].map((action) => ({ action, actor: "admin" })) },
+          },
+          include: {
+            customer: true,
+            items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+            history: { orderBy: { createdAt: "desc" } },
+          },
+        });
+      });
+      return NextResponse.json(enrich(cancelled));
+    }
+
+    data.notes = buildNotes(meta, visible);
+    const order = await prisma.order.update({
+      where: { id },
+      data: {
+        ...data,
+        history: historyEntries.length ? {
+          create: historyEntries.map((entry) => ({ action: entry, actor: "admin" })),
+        } : undefined,
+      },
+      include: {
+        customer: true,
+        items: { include: { product: { select: { stock: true } }, variant: { select: { stock: true } } } },
+        history: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    return NextResponse.json(enrich(order));
+  } catch (error: any) {
+    if (error?.message === "NOT_FOUND") return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
+    if (error?.message === "STOCK_SHORTAGE") return NextResponse.json({ error: "Stock insuficiente", shortages: error.shortages || [] }, { status: 409 });
+    console.error("Error actualizando pedido:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
 }
