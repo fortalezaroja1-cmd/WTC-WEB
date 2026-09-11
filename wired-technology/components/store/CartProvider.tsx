@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { X, Plus, Minus, Trash2, ShoppingCart, ChevronRight, ArrowLeft } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingCart, ChevronRight } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
 
 export interface CartItem {
@@ -36,16 +36,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hidratar carrito desde localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("wt_cart");
       if (saved) setItems(JSON.parse(saved));
+
+      // Conserva el origen aunque el cliente navegue por varias páginas antes de enviar el pedido.
+      const params = new URLSearchParams(window.location.search);
+      const source = params.get("origen") || params.get("utm_source");
+      if (source) localStorage.setItem("wt_order_origin", source.slice(0, 80));
+      else if (!localStorage.getItem("wt_order_origin")) localStorage.setItem("wt_order_origin", "Web");
     } catch {}
     setHydrated(true);
   }, []);
 
-  // Persistir carrito
   useEffect(() => {
     if (hydrated) localStorage.setItem("wt_cart", JSON.stringify(items));
   }, [items, hydrated]);
@@ -127,7 +131,7 @@ function CartDrawer() {
             </div>
             <a href="/checkout"
               className="mt-3 w-full bg-copper text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-copper-bright transition-colors">
-              Continuar al checkout <ChevronRight size={16} />
+              Enviar pedido <ChevronRight size={16} />
             </a>
           </div>
         )}
