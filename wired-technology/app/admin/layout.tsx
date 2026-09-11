@@ -33,6 +33,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
+    const syncInboxMode = () => {
+      const mobile = window.innerWidth < 768;
+      if (mobile && pathname === "/admin/inbox") router.replace("/admin/inbox/mobile");
+      if (!mobile && pathname === "/admin/inbox/mobile") router.replace("/admin/inbox");
+    };
+    syncInboxMode();
+    window.addEventListener("resize", syncInboxMode);
+    return () => window.removeEventListener("resize", syncInboxMode);
+  }, [pathname, router]);
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
     let active = true;
     const refresh = async () => {
       try {
@@ -62,12 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="font-mono text-[9px] tracking-[.12em] text-muted mt-0.5">PANEL ADMINISTRATIVO</div>
         </div>
         {mobile && (
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(false)}
-            className="w-9 h-9 rounded-lg border border-slate-dark flex items-center justify-center text-white"
-            aria-label="Cerrar menú"
-          >
+          <button type="button" onClick={() => setMobileMenuOpen(false)} className="w-9 h-9 rounded-lg border border-slate-dark flex items-center justify-center text-white" aria-label="Cerrar menú">
             <X size={18} />
           </button>
         )}
@@ -77,11 +84,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
           const showBadge = href === "/admin/pedidos" || href === "/admin/crm" || href === "/admin/inbox";
           return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium mb-0.5 transition-colors ${active ? "bg-slate-dark text-white" : "hover:bg-slate-dark/50"}`}
-            >
+            <Link key={href} href={href} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium mb-0.5 transition-colors ${active ? "bg-slate-dark text-white" : "hover:bg-slate-dark/50"}`}>
               <Icon size={16} />
               <span className="flex-1">{label}</span>
               {showBadge && newOrders > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</span>}
@@ -103,32 +106,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <header className="md:hidden sticky top-0 z-40 h-14 bg-graphite text-white border-b border-slate-dark flex items-center justify-between px-4 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(true)}
-          className="w-9 h-9 rounded-lg border border-slate-dark flex items-center justify-center"
-          aria-label="Abrir menú"
-        >
+        <button type="button" onClick={() => setMobileMenuOpen(true)} className="w-9 h-9 rounded-lg border border-slate-dark flex items-center justify-center" aria-label="Abrir menú">
           <Menu size={19} />
         </button>
         <div className="font-display font-bold text-[14px]">WIRED<span className="text-copper">·</span>TECH</div>
         <div className="w-9 flex justify-end">
           {newOrders > 0 && (
-            <Link href="/admin/inbox" className="min-w-6 h-6 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">
-              {newOrders}
-            </Link>
+            <Link href="/admin/inbox" className="min-w-6 h-6 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</Link>
           )}
         </div>
       </header>
 
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/55"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-label="Cerrar menú"
-          />
+          <button type="button" className="absolute inset-0 bg-black/55" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú" />
           <aside className="relative w-[82vw] max-w-[310px] h-full bg-graphite text-[#C4CCD6] flex flex-col shadow-2xl">
             <Navigation mobile />
           </aside>
@@ -136,7 +127,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       <main className="flex-1 min-w-0 w-full">
-        {newOrders > 0 && !["/admin/pedidos", "/admin/crm", "/admin/inbox"].includes(pathname) && (
+        {newOrders > 0 && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
           <Link href="/admin/inbox" className="mx-3 sm:mx-5 md:mx-7 mt-3 sm:mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
             <BellRing size={16} className="text-copper shrink-0" />
             <span>{newOrders} pedido{newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
