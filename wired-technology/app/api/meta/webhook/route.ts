@@ -1,19 +1,49 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { saveInboundWhatsAppMessage } from "@/lib/crm";
 import { processInboundLeadWithAgent } from "@/lib/sales-agent";
 
 export const dynamic = "force-dynamic";
 
-const VERIFY_TOKEN =
-  process.env.META_WEBHOOK_VERIFY_TOKEN || "wired_sales_meta_verify_2026";
+function getVerifyToken() {
+  return process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() || null;
+}
+
+function isValidMetaSignature(rawBody: string, signatureHeader: string | null) {
+  const appSecret = process.env.META_APP_SECRET?.trim();
+
+  // La verificación criptográfica queda activa automáticamente en cuanto
+  // META_APP_SECRET esté configurado. Mientras no exista, el diagnóstico
+  // de /api/admin/system/health marcará la integración como incompleta.
+  if (!appSecret) return true;
+  if (!signatureHeader?.startsWith("sha256=")) return false;
+
+  const received = signatureHeader.slice("sha256=".length);
+  const expected = createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
+
+  try {
+    const receivedBuffer = Buffer.from(received, "hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    if (receivedBuffer.length !== expectedBuffer.length) return false;
+    return timingSafeEqual(receivedBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(request: NextRequest) {
+  const verifyToken = getVerifyToken();
+  if (!verifyToken) {
+    console.error("[META_WEBHOOK] META_WEBHOOK_VERIFY_TOKEN no está configurado");
+    return NextResponse.json({ ok: false, error: "Webhook no configurado" }, { status: 503 });
+  }
+
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN && challenge) {
+  if (mode === "subscribe" && token === verifyToken && challenge) {
     return new NextResponse(challenge, { status: 200 });
   }
 
@@ -32,7 +62,19 @@ function getMessageText(message: any) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    if (!isValidMetaSignature(rawBody, request.headers.get("x-hub-signature-256"))) {
+      console.warn("[META_WEBHOOK] Firma inválida");
+      return NextResponse.json({ status: "INVALID_SIGNATURE" }, { status: 401 });
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ status: "INVALID_JSON" }, { status: 400 });
+    }
+
     console.log("[META_WEBHOOK] Event received", JSON.stringify(body));
 
     if (body?.object === "whatsapp_business_account" && Array.isArray(body?.entry)) {
