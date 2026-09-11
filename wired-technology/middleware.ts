@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const TOKEN_NAME = "wt_admin_token";
 
-function fromBase64Url(value: string): Uint8Array {
+function fromBase64Url(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   const decoded = atob(padded);
-  return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function decodePayload(value: string): Record<string, unknown> | null {
