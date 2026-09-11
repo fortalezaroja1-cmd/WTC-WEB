@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bot, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { Bot, LoaderCircle, RotateCcw, Send, ShieldCheck } from "lucide-react";
 
 type AgentState = Record<string, unknown>;
 type Turn = { role: "user" | "agent"; text: string };
@@ -26,6 +26,34 @@ type Decision = {
   } | null;
 };
 
+function randomBetween(minSeconds: number, maxSeconds: number) {
+  return Math.round((minSeconds + Math.random() * (maxSeconds - minSeconds)) * 1000);
+}
+
+function naturalDelay(decision: Decision, customerText: string) {
+  const intent = String(decision.intent || "").toUpperCase();
+  const action = String(decision.action || "").toUpperCase();
+  const replyLength = String(decision.reply || "").length;
+
+  if (["BUY", "CONFIRM"].includes(intent) || ["REQUEST_CONFIRMATION", "READY_TO_CLOSE", "COLLECT_CLOSE_DATA"].includes(action)) {
+    return randomBetween(6, 10);
+  }
+
+  if (["PRICE", "STOCK", "SHIPPING"].includes(intent) || ["QUOTE", "STOCK_SHORTAGE"].includes(action) || decision.matchedProduct) {
+    return randomBetween(4, 7);
+  }
+
+  if (customerText.length > 180 || replyLength > 320 || decision.needsHuman) {
+    return randomBetween(6, 10);
+  }
+
+  return randomBetween(2, 4);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function AgentTestPage() {
   const [message, setMessage] = useState("Hola, necesito 5 rollos de cable #12 para Medellín");
   const [state, setState] = useState<AgentState>({});
@@ -33,15 +61,22 @@ export default function AgentTestPage() {
   const [decision, setDecision] = useState<Decision | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [delayLabel, setDelayLabel] = useState("");
 
   const confidence = useMemo(() => decision ? `${Math.round((decision.confidence || 0) * 100)}%` : "—", [decision]);
 
   const run = async () => {
     const text = message.trim();
     if (!text || busy) return;
+
     setBusy(true);
     setError("");
+    setDelayLabel("Analizando mensaje...");
+    setTurns((prev) => [...prev, { role: "user", text }]);
+    setMessage("");
+
     try {
+      const startedAt = Date.now();
       const res = await fetch("/api/admin/agent/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,15 +84,23 @@ export default function AgentTestPage() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || "No se pudo ejecutar la prueba");
+
       const next: Decision = payload.decision;
+      const targetDelay = naturalDelay(next, text);
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, targetDelay - elapsed);
+
+      setDelayLabel(`Escribiendo... · respuesta en ~${Math.max(1, Math.ceil(remaining / 1000))} s`);
+      if (remaining > 0) await wait(remaining);
+
       setDecision(next);
       setState(next.state || {});
-      setTurns((prev) => [...prev, { role: "user", text }, { role: "agent", text: next.reply }]);
-      setMessage("");
+      setTurns((prev) => [...prev, { role: "agent", text: next.reply }]);
     } catch (e: any) {
       setError(e?.message || "No se pudo ejecutar la prueba");
     } finally {
       setBusy(false);
+      setDelayLabel("");
     }
   };
 
@@ -66,6 +109,7 @@ export default function AgentTestPage() {
     setTurns([]);
     setDecision(null);
     setError("");
+    setDelayLabel("");
     setMessage("Hola, necesito 5 rollos de cable #12 para Medellín");
   };
 
@@ -89,15 +133,15 @@ export default function AgentTestPage() {
           <div className="border-b border-hair px-5 py-4 flex items-center justify-between gap-3">
             <div>
               <div className="font-semibold">Conversación de prueba</div>
-              <div className="text-xs text-muted mt-0.5">Puedes enviar varios mensajes seguidos; el estado se conserva entre turnos.</div>
+              <div className="text-xs text-muted mt-0.5">Tiempo natural activo: respuestas simples 2–4 s, cotizaciones 4–7 s y cierres 6–10 s.</div>
             </div>
-            <button onClick={reset} className="inline-flex items-center gap-2 border border-hair rounded-lg px-3 py-2 text-xs font-semibold hover:border-copper">
+            <button onClick={reset} disabled={busy} className="inline-flex items-center gap-2 border border-hair rounded-lg px-3 py-2 text-xs font-semibold hover:border-copper disabled:opacity-50">
               <RotateCcw size={14} /> Reiniciar
             </button>
           </div>
 
           <div className="flex-1 p-5 space-y-3 bg-[#F7F8FA] overflow-y-auto">
-            {turns.length === 0 && (
+            {turns.length === 0 && !busy && (
               <div className="h-full min-h-[390px] flex items-center justify-center">
                 <div className="max-w-md text-center text-sm text-muted">
                   Escribe como lo haría un cliente. Ejemplo: “Necesito 5 rollos de cable #12 para Medellín”.
@@ -111,6 +155,15 @@ export default function AgentTestPage() {
                 </div>
               </div>
             ))}
+
+            {busy && (
+              <div className="flex justify-start">
+                <div className="inline-flex items-center gap-2 bg-white border border-hair text-muted rounded-2xl rounded-bl-md px-4 py-3 text-xs">
+                  <LoaderCircle size={14} className="animate-spin text-copper" />
+                  <span>{delayLabel || "Escribiendo..."}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-hair p-4 bg-white">
@@ -125,12 +178,13 @@ export default function AgentTestPage() {
                     run();
                   }
                 }}
+                disabled={busy}
                 rows={3}
-                placeholder="Escribe un mensaje de cliente..."
-                className="flex-1 resize-none bg-white border border-hair rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-copper"
+                placeholder={busy ? "Espera la respuesta del agente..." : "Escribe un mensaje de cliente..."}
+                className="flex-1 resize-none bg-white border border-hair rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-copper disabled:bg-[#F7F8FA] disabled:text-muted"
               />
               <button onClick={run} disabled={busy || !message.trim()} className="self-end inline-flex items-center gap-2 bg-copper text-white rounded-lg px-4 py-3 text-sm font-semibold disabled:opacity-50">
-                <Send size={15} /> {busy ? "Probando..." : "Enviar"}
+                <Send size={15} /> {busy ? "Esperando..." : "Enviar"}
               </button>
             </div>
           </div>
