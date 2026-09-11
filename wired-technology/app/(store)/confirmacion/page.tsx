@@ -3,13 +3,11 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, MessageCircle } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 
 function ConfirmationContent() {
   const params = useSearchParams();
   const orderNumber = params.get("order") || "—";
-  const waMsg = `Hola Wired Technology, confirmo mi pedido ${orderNumber}. ¿Cómo hago el pago?`;
-  const waUrl = `https://wa.me/573000000000?text=${encodeURIComponent(waMsg)}`;
 
   return (
     <div className="max-w-[560px] mx-auto px-5 py-16">
@@ -18,23 +16,22 @@ function ConfirmationContent() {
           <Check size={32} className="text-green" />
         </div>
         <h1 className="font-display text-2xl font-bold mb-1">¡Pedido recibido!</h1>
-        <p className="font-mono text-sm text-muted mb-6">{orderNumber}</p>
-        <p className="text-sm text-slate-dark mb-6">
-          Para confirmar el pago y coordinar el envío, escríbenos por WhatsApp.
+        <p className="font-mono text-sm text-muted mb-5">{orderNumber}</p>
+        <p className="text-sm text-slate-dark mb-5">
+          Nuestro equipo revisará disponibilidad y los datos de entrega antes de procesar el pedido.
         </p>
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="w-full bg-green text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity mb-3"
-        >
-          <MessageCircle size={17} /> Confirmar por WhatsApp
-        </a>
+        <div className="flex items-start gap-2 text-left bg-green-50 border border-green/20 rounded-lg p-3 mb-6">
+          <ShieldCheck size={18} className="text-green shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-semibold">Pago en casa / contraentrega</div>
+            <div className="text-xs text-muted mt-0.5">No necesitas realizar un pago en línea para registrar esta solicitud.</div>
+          </div>
+        </div>
         <Link
           href="/"
-          className="w-full border border-hair font-semibold py-3 rounded-lg flex items-center justify-center hover:border-copper transition-colors text-sm"
+          className="w-full bg-copper text-white font-semibold py-3 rounded-lg flex items-center justify-center hover:bg-copper-bright transition-colors text-sm"
         >
-          Seguir comprando
+          Volver a la tienda
         </Link>
       </div>
     </div>
