@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing } from "lucide-react";
+import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Trello } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard },
+  { href: "/admin/crm", label: "CRM", icon: Trello },
   { href: "/admin/productos", label: "Productos", icon: Boxes },
   { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
   { href: "/admin/inventario", label: "Inventario", icon: Package },
@@ -51,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 p-2.5">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
-            const isOrders = href === "/admin/pedidos";
+            const showBadge = href === "/admin/pedidos" || href === "/admin/crm";
             return (
               <Link key={href} href={href}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13.5px] font-medium mb-0.5 transition-colors ${
@@ -59,7 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }`}>
                 <Icon size={17} />
                 <span className="flex-1">{label}</span>
-                {isOrders && newOrders > 0 && (
+                {showBadge && newOrders > 0 && (
                   <span className="min-w-5 h-5 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</span>
                 )}
               </Link>
@@ -76,8 +77,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
       <main className="flex-1 min-w-0">
-        {newOrders > 0 && pathname !== "/admin/pedidos" && (
-          <Link href="/admin/pedidos" className="mx-7 mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
+        {newOrders > 0 && pathname !== "/admin/pedidos" && pathname !== "/admin/crm" && (
+          <Link href="/admin/crm" className="mx-7 mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
             <BellRing size={16} className="text-copper" />
             {newOrders} pedido{newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar
           </Link>
