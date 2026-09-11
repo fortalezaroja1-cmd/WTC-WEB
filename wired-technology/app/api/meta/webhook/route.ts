@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveInboundWhatsAppMessage } from "@/lib/crm";
+import { processInboundLeadWithAgent } from "@/lib/sales-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -53,18 +54,35 @@ export async function POST(request: NextRequest) {
               : Number.isFinite(timestamp)
                 ? new Date(timestamp * 1000)
                 : new Date();
+            const text = getMessageText(message);
+            const source = isMetaTest ? "META_TEST" : "WHATSAPP";
 
-            await saveInboundWhatsAppMessage({
+            const saved = await saveInboundWhatsAppMessage({
               metaMessageId: String(message.id),
               whatsappId: String(message.from),
               phone: String(message.from),
               name: contact?.profile?.name ? String(contact.profile.name) : null,
               type: String(message.type || "unknown"),
-              text: getMessageText(message),
+              text,
               sentAt,
-              source: isMetaTest ? "META_TEST" : "WHATSAPP",
+              source,
               payload: { entryId: entry?.id || null, value, message },
             });
+
+            if (saved.inserted) {
+              try {
+                await processInboundLeadWithAgent({
+                  leadId: saved.leadId,
+                  metaMessageId: String(message.id),
+                  text,
+                  source,
+                });
+              } catch (agentError) {
+                // El webhook debe seguir respondiendo 200 a Meta aunque el agente falle.
+                // El motor registra el error y crea una notificación para intervención humana.
+                console.error("[SALES_AGENT] Processing error", agentError);
+              }
+            }
           }
         }
       }
