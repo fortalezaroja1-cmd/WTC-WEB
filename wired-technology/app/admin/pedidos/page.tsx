@@ -193,7 +193,15 @@ export default function PedidosAdmin() {
                     onChange={(e) => requestUpdate(cur.id, { shipStatus: e.target.value }).catch((err) => setActionError(err.message))}
                     className="w-full border border-hair rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-copper"
                   >
-                    {SHIP_STATUSES.map((s) => <option key={s} value={s}>{SHIP_LABELS[s]}</option>)}
+                    {SHIP_STATUSES.map((s) => (
+                      <option
+                        key={s}
+                        value={s}
+                        disabled={["APPROVED", "PREPARING", "SHIPPED", "DELIVERED"].includes(s) && !cur.workflow?.inventoryApplied}
+                      >
+                        {SHIP_LABELS[s]}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </section>
