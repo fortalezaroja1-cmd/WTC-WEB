@@ -32,13 +32,21 @@ export default function CheckoutPage() {
     setLoading(true);
     setError("");
     try {
+      let requestId = sessionStorage.getItem("wt_order_request_id");
+      if (!requestId) {
+        requestId = crypto.randomUUID();
+        sessionStorage.setItem("wt_order_request_id", requestId);
+      }
+      const origin = localStorage.getItem("wt_order_origin") || "Web";
+
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer: form, items, subtotal, shipping, total }),
+        body: JSON.stringify({ customer: form, items, subtotal, shipping, total, requestId, origin }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al crear el pedido");
+      sessionStorage.removeItem("wt_order_request_id");
       clearCart();
       router.push(`/confirmacion?order=${data.orderNumber}`);
     } catch (e: any) {
