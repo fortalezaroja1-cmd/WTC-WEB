@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Check Wired Technology health
         env:
-          HEALTH_URL: https://wired-technology-fondetrefi-s-projects.vercel.app/api/health
+          HEALTH_URL: https://wired-technology-peach.vercel.app/api/health
         run: |
           set -euo pipefail
           echo "Checking ${HEALTH_URL}"
