@@ -1,7 +1,8 @@
 "use client";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut } from "lucide-react";
+import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard },
@@ -15,8 +16,24 @@ const NAV = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [newOrders, setNewOrders] = useState(0);
 
-  // No mostrar sidebar en login
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/admin/orders", { cache: "no-store" });
+        if (!res.ok) return;
+        const orders = await res.json();
+        if (active) setNewOrders(orders.filter((o: any) => o.shipStatus === "PENDING_PAYMENT").length);
+      } catch {}
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, [pathname]);
+
   if (pathname === "/admin/login") return <>{children}</>;
 
   const logout = async () => {
@@ -34,12 +51,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 p-2.5">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
+            const isOrders = href === "/admin/pedidos";
             return (
               <Link key={href} href={href}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13.5px] font-medium mb-0.5 transition-colors ${
                   active ? "bg-slate-dark text-white" : "hover:bg-slate-dark/50"
                 }`}>
-                <Icon size={17} /> {label}
+                <Icon size={17} />
+                <span className="flex-1">{label}</span>
+                {isOrders && newOrders > 0 && (
+                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</span>
+                )}
               </Link>
             );
           })}
@@ -54,6 +76,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
       <main className="flex-1 min-w-0">
+        {newOrders > 0 && pathname !== "/admin/pedidos" && (
+          <Link href="/admin/pedidos" className="mx-7 mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-4 py-3 text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
+            <BellRing size={16} className="text-copper" />
+            {newOrders} pedido{newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar
+          </Link>
+        )}
         <div className="p-7">{children}</div>
       </main>
     </div>
