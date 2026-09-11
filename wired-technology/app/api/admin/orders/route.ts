@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncLeadStageByPhone } from "@/lib/sales-agent";
 
 type OrderMeta = {
   requestId: string;
@@ -53,6 +54,14 @@ function getAvailability(order: any) {
       ok: available !== null && available >= it.qty,
     };
   });
+}
+
+async function syncOrderLead(order: any, status: "SCHEDULED" | "DELIVERED" | "LOST", reason: string) {
+  try {
+    await syncLeadStageByPhone(order?.customer?.phone, status, reason);
+  } catch (error) {
+    console.error("[CRM_STAGE_SYNC] Error", error);
+  }
 }
 
 export async function GET() {
@@ -179,12 +188,13 @@ export async function PUT(req: NextRequest) {
         return updated;
       });
 
+      await syncOrderLead(confirmed, "SCHEDULED", `Pedido ${confirmed.number} confirmado · lead movido automáticamente a Programado`);
       return NextResponse.json(enrich(confirmed));
     }
 
     const current = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, customer: true },
     });
     if (!current) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
 
@@ -244,6 +254,7 @@ export async function PUT(req: NextRequest) {
           },
         });
       });
+      await syncOrderLead(cancelled, "LOST", `Pedido ${cancelled.number} cancelado · lead movido automáticamente a Perdido`);
       return NextResponse.json(enrich(cancelled));
     }
 
@@ -262,6 +273,12 @@ export async function PUT(req: NextRequest) {
         history: { orderBy: { createdAt: "desc" } },
       },
     });
+
+    if (shipStatus === "DELIVERED") {
+      await syncOrderLead(order, "DELIVERED", `Pedido ${order.number} entregado · lead movido automáticamente a Entregado`);
+    } else if (shipStatus === "CANCELLED") {
+      await syncOrderLead(order, "LOST", `Pedido ${order.number} cancelado · lead movido automáticamente a Perdido`);
+    }
 
     return NextResponse.json(enrich(order));
   } catch (error: any) {
