@@ -20,6 +20,14 @@ export function ensureCrmTables() {
           "capC" BOOLEAN NOT NULL DEFAULT false,
           "capA" BOOLEAN NOT NULL DEFAULT false,
           "capP" BOOLEAN NOT NULL DEFAULT false,
+          "capPending" BOOLEAN NOT NULL DEFAULT true,
+          "capStep" TEXT NOT NULL DEFAULT 'C',
+          "capDecision" TEXT,
+          "capLabel" TEXT,
+          "capNextStep" TEXT,
+          "capNextAt" TIMESTAMP(3),
+          "capSequence" TEXT,
+          "capCompletedAt" TIMESTAMP(3),
           "unreadCount" INTEGER NOT NULL DEFAULT 0,
           "lastMessageText" TEXT,
           "lastMessageAt" TIMESTAMP(3),
@@ -32,8 +40,17 @@ export function ensureCrmTables() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "unreadCount" INTEGER NOT NULL DEFAULT 0`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastInboundAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastOutboundAt" TIMESTAMP(3)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capPending" BOOLEAN NOT NULL DEFAULT true`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capStep" TEXT NOT NULL DEFAULT 'C'`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capDecision" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capLabel" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capNextStep" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capNextAt" TIMESTAMP(3)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capSequence" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capCompletedAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Lead_whatsappId_key" ON "Lead"("whatsappId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_lastMessageAt_idx" ON "Lead"("lastMessageAt" DESC)`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_capNextAt_idx" ON "Lead"("capNextAt")`);
 
       await prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "CrmMessage" (
@@ -51,6 +68,29 @@ export function ensureCrmTables() {
       `);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CrmMessage_metaMessageId_key" ON "CrmMessage"("metaMessageId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmMessage_leadId_sentAt_idx" ON "CrmMessage"("leadId", "sentAt" DESC)`);
+
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "CrmActivity" (
+          "id" TEXT PRIMARY KEY,
+          "leadId" TEXT NOT NULL,
+          "type" TEXT NOT NULL,
+          "text" TEXT NOT NULL,
+          "meta" JSONB,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "CrmActivity_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_leadId_createdAt_idx" ON "CrmActivity"("leadId", "createdAt" DESC)`);
+
+      // Leads que ya tenían las tres marcas del sistema anterior se consideran resueltos,
+      // para no bloquear conversaciones históricas al activar el nuevo flujo obligatorio.
+      await prisma.$executeRawUnsafe(`
+        UPDATE "Lead"
+        SET "capPending" = false,
+            "capDecision" = COALESCE("capDecision", 'LEGACY'),
+            "capCompletedAt" = COALESCE("capCompletedAt", "updatedAt")
+        WHERE "capC" = true AND "capA" = true AND "capP" = true AND "capDecision" IS NULL
+      `);
     })().catch((error) => {
       crmTablesReady = null;
       throw error;
@@ -89,6 +129,17 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
         "lastMessageText" = EXCLUDED."lastMessageText",
         "lastMessageAt" = EXCLUDED."lastMessageAt",
         "lastInboundAt" = EXCLUDED."lastInboundAt",
+        "capPending" = true,
+        "capStep" = 'C',
+        "capC" = false,
+        "capA" = false,
+        "capP" = false,
+        "capDecision" = NULL,
+        "capLabel" = NULL,
+        "capNextStep" = NULL,
+        "capNextAt" = NULL,
+        "capSequence" = NULL,
+        "capCompletedAt" = NULL,
         "updatedAt" = NOW()
       RETURNING "id"
     `,
@@ -173,6 +224,17 @@ export async function saveOutboundWhatsAppMessage(input: {
           "lastOutboundAt" = $3,
           "unreadCount" = 0,
           "status" = CASE WHEN "status" = 'NEW' THEN 'CONTACTED' ELSE "status" END,
+          "capPending" = true,
+          "capStep" = 'C',
+          "capC" = false,
+          "capA" = false,
+          "capP" = false,
+          "capDecision" = NULL,
+          "capLabel" = NULL,
+          "capNextStep" = NULL,
+          "capNextAt" = NULL,
+          "capSequence" = NULL,
+          "capCompletedAt" = NULL,
           "updatedAt" = NOW()
       WHERE "id" = $1
     `,
