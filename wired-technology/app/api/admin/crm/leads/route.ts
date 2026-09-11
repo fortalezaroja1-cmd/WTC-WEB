@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ensureCrmTables } from "@/lib/crm";
+import { ensureCrmTables, escalateUnansweredLeadsToCall } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,7 @@ async function addActivity(leadId: string, type: string, text: string, meta: unk
 export async function GET(request: NextRequest) {
   try {
     await ensureCrmTables();
+    await escalateUnansweredLeadsToCall();
     const { searchParams } = new URL(request.url);
     const leadId = searchParams.get("leadId");
 
@@ -83,6 +84,30 @@ export async function PUT(request: NextRequest) {
         `UPDATE "Lead" SET "unreadCount" = 0, "updatedAt" = NOW() WHERE "id" = $1`,
         id
       );
+    } else if (body?.action === "call-completed") {
+      if (current.capLabel !== "LLAMADA") {
+        return NextResponse.json({ error: "El lead no está en etapa de llamada" }, { status: 409 });
+      }
+      await prisma.$executeRawUnsafe(
+        `
+          UPDATE "Lead"
+          SET "capPending" = true,
+              "capStep" = 'C',
+              "capC" = false,
+              "capA" = false,
+              "capP" = false,
+              "capDecision" = NULL,
+              "capLabel" = NULL,
+              "capNextStep" = NULL,
+              "capNextAt" = NULL,
+              "capSequence" = NULL,
+              "capCompletedAt" = NULL,
+              "updatedAt" = NOW()
+          WHERE "id" = $1
+        `,
+        id
+      );
+      await addActivity(id, "CALL", "Llamada registrada · resolver nuevamente C → A → P", { action: "call-completed" });
     } else if (body?.action === "cap-answer") {
       if (!current.capPending) {
         return NextResponse.json({ error: "Esta gestión CAP ya fue completada" }, { status: 409 });
@@ -190,7 +215,7 @@ export async function PUT(request: NextRequest) {
             SET "capP" = true,
                 "capPending" = false,
                 "capDecision" = 'P',
-                "capLabel" = 'SEGUIMIENTO',
+                "capLabel" = CASE WHEN $4 = 'CALL' THEN 'LLAMADA' ELSE 'SEGUIMIENTO' END,
                 "capNextStep" = $2,
                 "capNextAt" = $3,
                 "capSequence" = $4,
@@ -203,7 +228,7 @@ export async function PUT(request: NextRequest) {
           nextAt,
           sequence
         );
-        await addActivity(id, "CAP", `P · PLANEAR: ${nextStep}`, { step: "P", answer: "YES", label: "SEGUIMIENTO", nextStep, nextAt, sequence });
+        await addActivity(id, "CAP", `P · PLANEAR: ${nextStep}`, { step: "P", answer: "YES", label: sequence === "CALL" ? "LLAMADA" : "SEGUIMIENTO", nextStep, nextAt, sequence });
       } else {
         return NextResponse.json({ error: "Paso CAP inválido" }, { status: 400 });
       }
