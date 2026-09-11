@@ -8,7 +8,6 @@ const VERIFY_TOKEN =
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
@@ -17,10 +16,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(challenge, { status: 200 });
   }
 
-  return NextResponse.json(
-    { ok: false, error: "Webhook verification failed" },
-    { status: 403 }
-  );
+  return NextResponse.json({ ok: false, error: "Webhook verification failed" }, { status: 403 });
 }
 
 function getMessageText(message: any) {
@@ -36,7 +32,6 @@ function getMessageText(message: any) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
     console.log("[META_WEBHOOK] Event received", JSON.stringify(body));
 
     if (body?.object === "whatsapp_business_account" && Array.isArray(body?.entry)) {
@@ -51,10 +46,13 @@ export async function POST(request: NextRequest) {
 
           for (const message of messages) {
             if (!message?.id || !message?.from) continue;
-
             const contact = contacts.find((item: any) => item?.wa_id === message.from) || contacts[0];
             const timestamp = Number(message.timestamp);
-            const sentAt = Number.isFinite(timestamp) ? new Date(timestamp * 1000) : new Date();
+            const sentAt = isMetaTest
+              ? new Date()
+              : Number.isFinite(timestamp)
+                ? new Date(timestamp * 1000)
+                : new Date();
 
             await saveInboundWhatsAppMessage({
               metaMessageId: String(message.id),
@@ -75,11 +73,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "EVENT_RECEIVED" }, { status: 200 });
   } catch (error) {
     console.error("[META_WEBHOOK] Processing error", error);
-
-    // Meta retries failed webhook deliveries. Return 500 when persistence fails.
-    return NextResponse.json(
-      { status: "PROCESSING_ERROR" },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: "PROCESSING_ERROR" }, { status: 500 });
   }
 }
