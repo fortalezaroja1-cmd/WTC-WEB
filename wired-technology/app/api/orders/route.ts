@@ -7,19 +7,47 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { customer, items, subtotal, shipping, total } = body;
 
-    if (!customer?.name || !customer?.phone || !customer?.address || !customer?.city || !items?.length) {
+    if (!customer?.name || !customer?.phone || !customer?.address || !customer?.city || !customer?.barrio || !items?.length) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
 
-    // Crear o encontrar cliente
     let dbCustomer = await prisma.customer.findFirst({ where: { phone: customer.phone } });
+    const customerNotes = [
+      customer.barrio ? `Barrio: ${customer.barrio}` : null,
+      customer.reference ? `Referencia: ${customer.reference}` : null,
+    ].filter(Boolean).join("\n");
+
     if (!dbCustomer) {
-      dbCustomer = await prisma.customer.create({ data: customer });
+      dbCustomer = await prisma.customer.create({
+        data: {
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email || null,
+          address: customer.address,
+          city: customer.city,
+          notes: customerNotes || null,
+        },
+      });
+    } else {
+      dbCustomer = await prisma.customer.update({
+        where: { id: dbCustomer.id },
+        data: {
+          name: customer.name,
+          email: customer.email || dbCustomer.email,
+          address: customer.address,
+          city: customer.city,
+          notes: customerNotes || dbCustomer.notes,
+        },
+      });
     }
 
     const orderNumber = generateOrderNumber();
+    const orderNotes = [
+      customer.barrio ? `Barrio: ${customer.barrio}` : null,
+      customer.reference ? `Referencia de entrega: ${customer.reference}` : null,
+      customer.notes ? `Observaciones: ${customer.notes}` : null,
+    ].filter(Boolean).join("\n");
 
-    // Crear pedido con items
     const order = await prisma.order.create({
       data: {
         number: orderNumber,
@@ -27,7 +55,8 @@ export async function POST(req: NextRequest) {
         subtotal,
         shipping,
         total,
-        paymentMethod: "Mercado Pago / WhatsApp",
+        paymentMethod: "Pago en casa / contraentrega",
+        notes: orderNotes || null,
         items: {
           create: items.map((it: any) => ({
             name: it.name,
@@ -40,35 +69,16 @@ export async function POST(req: NextRequest) {
           })),
         },
         history: {
-          create: { action: "Pedido creado desde la tienda", actor: "cliente" },
+          create: { action: "Solicitud de pedido creada desde la tienda", actor: "cliente" },
         },
       },
     });
 
-    // Descontar inventario
-    for (const it of items) {
-      if (it.variantId) {
-        await prisma.variant.update({
-          where: { id: it.variantId },
-          data: { stock: { decrement: it.qty } },
-        });
-        await prisma.stockMovement.create({
-          data: { type: "SALE", qty: -it.qty, reason: `Venta pedido ${orderNumber}`, productId: it.productId, variantId: it.variantId },
-        });
-      } else if (it.productId) {
-        await prisma.product.update({
-          where: { id: it.productId },
-          data: { stock: { decrement: it.qty } },
-        });
-        await prisma.stockMovement.create({
-          data: { type: "SALE", qty: -it.qty, reason: `Venta pedido ${orderNumber}`, productId: it.productId },
-        });
-      }
-    }
-
-    // Notificación
     await prisma.notification.create({
-      data: { type: "order", message: `Nuevo pedido ${orderNumber} por $${Math.round(total).toLocaleString("es-CO")}` },
+      data: {
+        type: "order",
+        message: `Nueva solicitud ${orderNumber} por $${Math.round(total).toLocaleString("es-CO")}`,
+      },
     });
 
     return NextResponse.json({ orderNumber: order.number, orderId: order.id });
