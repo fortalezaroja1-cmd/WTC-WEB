@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Phone, Plus, Trash2 } from "lucide-react";
 
 const DEFAULT_AUTOMATIONS = { newOrderTask: true, followup24h: true, postSale48h: true, capTasks: true };
 
@@ -45,7 +45,18 @@ export default function TareasPage() {
     for (const lead of leads) {
       if (!automations.capTasks) break;
       const seller = lead.assignedSellerName || "Sin responsable";
-      if (lead.capPending !== false && lead.lastOutboundAt) {
+
+      if (lead.capLabel === "LLAMADA" && !["CLOSED", "LOST"].includes(lead.status)) {
+        out.push({
+          id: `call-${lead.id}`,
+          title: `Llamar ahora · ${lead.name || lead.phone || "Lead"}`,
+          detail: `${seller} · 24h sin respuesta${lead.phone ? ` · ${lead.phone}` : ""}`,
+          href: "/admin/inbox",
+          kind: "LLAMADA",
+          priority: -1,
+          call: true,
+        });
+      } else if (lead.capPending !== false && lead.lastOutboundAt) {
         out.push({
           id: `cap-${lead.id}`,
           title: `Resolver CAP · ${lead.name || lead.phone || "Lead"}`,
@@ -80,11 +91,12 @@ export default function TareasPage() {
 
   const open = tasks.filter(t => t.status !== "DONE");
   const done = tasks.filter(t => t.status === "DONE");
+  const callCount = systemTasks.filter(t => t.call).length;
 
   return <div className="max-w-[1100px]">
     <div className="flex items-end justify-between gap-4 mb-5">
       <div><h1 className="font-display text-2xl font-bold">Tareas</h1><p className="text-sm text-muted mt-1">Seguimientos, llamadas, CAP pendiente y tareas operativas.</p></div>
-      <div className="text-xs bg-white border border-hair rounded-lg px-3 py-2"><b>{systemTasks.length + open.length}</b> pendientes</div>
+      <div className="flex gap-2"><div className="text-xs bg-white border border-hair rounded-lg px-3 py-2"><b>{systemTasks.length + open.length}</b> pendientes</div>{callCount > 0 && <div className="text-xs bg-copper/10 text-copper border border-copper/20 rounded-lg px-3 py-2 flex items-center gap-1.5"><Phone size={13}/><b>{callCount}</b> llamadas</div>}</div>
     </div>
 
     <div className="bg-white border border-hair rounded-xl p-4 mb-5 grid grid-cols-1 md:grid-cols-[1fr_180px_180px_auto] gap-2">
@@ -96,11 +108,11 @@ export default function TareasPage() {
 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <section className="bg-white border border-hair rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-hair"><h2 className="font-semibold">Automáticas</h2><p className="text-xs text-muted">CAP tiene prioridad: una conversación no termina sin Cerrar, Acordar o Planear.</p></div>
+        <div className="px-4 py-3 border-b border-hair"><h2 className="font-semibold">Automáticas</h2><p className="text-xs text-muted">Las llamadas por falta de respuesta tienen prioridad máxima.</p></div>
         <div className="divide-y divide-hair">
           {systemTasks.length === 0 && <div className="p-6 text-sm text-muted">No hay tareas automáticas pendientes.</div>}
-          {systemTasks.map(t => <div key={t.id} className="p-4 flex items-center justify-between gap-4">
-            <div className="min-w-0"><div className="text-sm font-semibold break-words">{t.title}</div><div className="text-xs text-muted mt-1 break-words">{t.kind} · {t.detail || "Sin cliente"}</div></div>
+          {systemTasks.map(t => <div key={t.id} className={`p-4 flex items-center justify-between gap-4 ${t.call ? "bg-copper/5" : ""}`}>
+            <div className="min-w-0"><div className={`text-sm font-semibold break-words ${t.call ? "text-copper" : ""}`}>{t.title}</div><div className="text-xs text-muted mt-1 break-words">{t.kind} · {t.detail || "Sin cliente"}</div></div>
             <Link href={t.href || "/admin/pedidos"} className="text-xs font-semibold text-copper shrink-0">Abrir</Link>
           </div>)}
         </div>
