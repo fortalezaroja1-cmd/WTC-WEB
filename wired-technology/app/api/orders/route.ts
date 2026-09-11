@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncLeadStageByPhone } from "@/lib/sales-agent";
 
 type OrderMeta = {
   requestId: string;
@@ -141,6 +142,12 @@ export async function POST(req: NextRequest) {
 
       return order;
     });
+
+    try {
+      await syncLeadStageByPhone(customer.phone, "SCHEDULED", `Pedido ${result.number} creado · lead movido automáticamente a Programado`);
+    } catch (syncError) {
+      console.error("[CRM_STAGE_SYNC] No se pudo sincronizar pedido nuevo", syncError);
+    }
 
     return NextResponse.json({ orderNumber: result.number, orderId: result.id });
   } catch (error: any) {
