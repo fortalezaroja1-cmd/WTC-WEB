@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { saveInboundWhatsAppMessage } from "@/lib/crm";
 import { processInboundLeadWithAgent } from "@/lib/sales-agent";
+import { maybeHandleAwayMessage } from "@/lib/away-message";
 
 export const dynamic = "force-dynamic";
 
@@ -112,17 +113,35 @@ export async function POST(request: NextRequest) {
             });
 
             if (saved.inserted) {
-              try {
-                await processInboundLeadWithAgent({
-                  leadId: saved.leadId,
-                  metaMessageId: String(message.id),
-                  text,
-                  source,
-                });
-              } catch (agentError) {
-                // El webhook debe seguir respondiendo 200 a Meta aunque el agente falle.
-                // El motor registra el error y crea una notificación para intervención humana.
-                console.error("[SALES_AGENT] Processing error", agentError);
+              let handledByAwayMessage = false;
+
+              if (!isMetaTest) {
+                try {
+                  handledByAwayMessage = await maybeHandleAwayMessage({
+                    leadId: saved.leadId,
+                    whatsappId: String(message.from),
+                    phoneNumberId: value?.metadata?.phone_number_id,
+                  });
+                } catch (awayError) {
+                  // Si la evaluación de ausencia falla por un error inesperado,
+                  // dejamos que el agente normal intente responder para no perder el lead.
+                  console.error("[AWAY_MESSAGE] Processing error", awayError);
+                }
+              }
+
+              if (!handledByAwayMessage) {
+                try {
+                  await processInboundLeadWithAgent({
+                    leadId: saved.leadId,
+                    metaMessageId: String(message.id),
+                    text,
+                    source,
+                  });
+                } catch (agentError) {
+                  // El webhook debe seguir respondiendo 200 a Meta aunque el agente falle.
+                  // El motor registra el error y crea una notificación para intervención humana.
+                  console.error("[SALES_AGENT] Processing error", agentError);
+                }
               }
             }
           }
