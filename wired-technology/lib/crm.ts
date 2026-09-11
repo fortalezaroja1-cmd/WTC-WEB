@@ -20,12 +20,18 @@ export function ensureCrmTables() {
           "capC" BOOLEAN NOT NULL DEFAULT false,
           "capA" BOOLEAN NOT NULL DEFAULT false,
           "capP" BOOLEAN NOT NULL DEFAULT false,
+          "unreadCount" INTEGER NOT NULL DEFAULT 0,
           "lastMessageText" TEXT,
           "lastMessageAt" TIMESTAMP(3),
+          "lastInboundAt" TIMESTAMP(3),
+          "lastOutboundAt" TIMESTAMP(3),
           "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "unreadCount" INTEGER NOT NULL DEFAULT 0`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastInboundAt" TIMESTAMP(3)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastOutboundAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Lead_whatsappId_key" ON "Lead"("whatsappId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_lastMessageAt_idx" ON "Lead"("lastMessageAt" DESC)`);
 
@@ -73,15 +79,16 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
     `
       INSERT INTO "Lead" (
         "id", "whatsappId", "phone", "name", "channel", "source", "status",
-        "lastMessageText", "lastMessageAt", "createdAt", "updatedAt"
+        "lastMessageText", "lastMessageAt", "lastInboundAt", "createdAt", "updatedAt"
       )
-      VALUES ($1, $2, $3, $4, 'WHATSAPP', $5, 'NEW', $6, $7, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, 'WHATSAPP', $5, 'NEW', $6, $7, $7, NOW(), NOW())
       ON CONFLICT ("whatsappId") DO UPDATE SET
         "phone" = COALESCE(EXCLUDED."phone", "Lead"."phone"),
         "name" = COALESCE(EXCLUDED."name", "Lead"."name"),
         "source" = CASE WHEN "Lead"."source" = 'META_TEST' THEN EXCLUDED."source" ELSE "Lead"."source" END,
         "lastMessageText" = EXCLUDED."lastMessageText",
         "lastMessageAt" = EXCLUDED."lastMessageAt",
+        "lastInboundAt" = EXCLUDED."lastInboundAt",
         "updatedAt" = NOW()
       RETURNING "id"
     `,
@@ -116,6 +123,10 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
   );
 
   if (inserted.length) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Lead" SET "unreadCount" = "unreadCount" + 1, "updatedAt" = NOW() WHERE "id" = $1`,
+      resolvedLeadId
+    );
     const label = input.name || input.phone || input.whatsappId;
     await prisma.notification.create({
       data: {
@@ -126,4 +137,47 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
   }
 
   return { leadId: resolvedLeadId, inserted: inserted.length > 0 };
+}
+
+export async function saveOutboundWhatsAppMessage(input: {
+  leadId: string;
+  metaMessageId: string;
+  text: string;
+  sentAt?: Date;
+  payload?: unknown;
+}) {
+  await ensureCrmTables();
+  const sentAt = input.sentAt || new Date();
+
+  await prisma.$queryRawUnsafe(
+    `
+      INSERT INTO "CrmMessage" (
+        "id", "metaMessageId", "leadId", "direction", "type", "text", "payload", "sentAt", "createdAt"
+      )
+      VALUES ($1, $2, $3, 'OUTBOUND', 'text', $4, $5::jsonb, $6, NOW())
+      ON CONFLICT ("metaMessageId") DO NOTHING
+    `,
+    randomUUID(),
+    input.metaMessageId,
+    input.leadId,
+    input.text,
+    JSON.stringify(input.payload ?? {}),
+    sentAt
+  );
+
+  await prisma.$executeRawUnsafe(
+    `
+      UPDATE "Lead"
+      SET "lastMessageText" = $2,
+          "lastMessageAt" = $3,
+          "lastOutboundAt" = $3,
+          "unreadCount" = 0,
+          "status" = CASE WHEN "status" = 'NEW' THEN 'CONTACTED' ELSE "status" END,
+          "updatedAt" = NOW()
+      WHERE "id" = $1
+    `,
+    input.leadId,
+    input.text,
+    sentAt
+  );
 }
