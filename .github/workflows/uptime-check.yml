@@ -1,0 +1,30 @@
+name: Uptime Check
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Wired Technology health
+        env:
+          HEALTH_URL: https://wired-technology-fondetrefi-s-projects.vercel.app/api/health
+        run: |
+          set -euo pipefail
+          echo "Checking ${HEALTH_URL}"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 30 \
+            "${HEALTH_URL}"
