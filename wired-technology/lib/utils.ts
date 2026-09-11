@@ -21,27 +21,36 @@ export function timeAgo(date: Date | string): string {
 }
 
 export function waLink(phone: string, msg: string): string {
-  return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  const digits = String(phone || "").replace(/\D/g, "");
+  const normalized = digits.length === 10 ? `57${digits}` : digits;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(msg)}`;
 }
 
+// Reutilizamos el enum existente de Prisma para no exigir una migración.
+// El orden de esta lista representa el flujo comercial real del pedido.
 export const SHIP_STATUSES = [
-  "PENDING_PAYMENT", "APPROVED", "PREPARING", "READY",
-  "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED",
+  "PENDING_PAYMENT", // Nuevo
+  "READY",           // Revisado
+  "APPROVED",        // Confirmado
+  "PREPARING",       // Preparando
+  "SHIPPED",         // Despachado
+  "DELIVERED",       // Entregado
+  "CANCELLED",       // Cancelado
 ] as const;
 
 export const SHIP_LABELS: Record<string, string> = {
-  PENDING_PAYMENT: "Pendiente de pago",
-  APPROVED: "Pago aprobado",
-  PREPARING: "Preparando pedido",
-  READY: "Listo para enviar",
-  SHIPPED: "Enviado",
+  PENDING_PAYMENT: "Nuevo",
+  READY: "Revisado",
+  APPROVED: "Confirmado",
+  PREPARING: "Preparando",
+  SHIPPED: "Despachado",
   DELIVERED: "Entregado",
   CANCELLED: "Cancelado",
   REFUNDED: "Reembolsado",
 };
 
 export const PAY_LABELS: Record<string, string> = {
-  PENDING: "Pendiente de pago",
+  PENDING: "Pendiente / contraentrega",
   APPROVED: "Pago aprobado",
   REJECTED: "Pago rechazado",
   REFUNDED: "Reembolsado",
