@@ -1,0 +1,42 @@
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Check } from "lucide-react";
+
+const FIELDS = [
+  ["storeName","Nombre del negocio","text"],
+  ["whatsapp","WhatsApp principal","text"],
+  ["city","Ciudad base","text"],
+  ["workStart","Inicio horario laboral","time"],
+  ["workEnd","Fin horario laboral","time"],
+  ["responseSlaMinutes","Meta de primera respuesta (minutos)","number"],
+  ["followupHours","Seguimiento a cotizaciones (horas)","number"],
+] as const;
+
+export default function ConfiguracionPage(){
+  const [cfg,setCfg]=useState<Record<string,string>>({});
+  const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
+  useEffect(()=>{ fetch("/api/admin/settings").then(r=>r.json()).then((d)=>setCfg({ workStart:"08:00", workEnd:"18:00", responseSlaMinutes:"10", followupHours:"24", ...d })); },[]);
+  const save=async()=>{
+    setSaving(true);
+    const allowed:any={};
+    for(const [key] of FIELDS) allowed[key]=cfg[key]||"";
+    await fetch("/api/admin/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(allowed)});
+    setSaving(false); setSaved(true); setTimeout(()=>setSaved(false),2000);
+  };
+  return <div className="max-w-[900px]">
+    <div className="mb-5"><h1 className="font-display text-2xl font-bold">Configuración</h1><p className="text-sm text-muted mt-1">Parámetros operativos del CRM y del equipo comercial.</p></div>
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
+      <div className="bg-white border border-hair rounded-xl p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {FIELDS.map(([key,label,type])=><div key={key} className={key==="storeName"?"md:col-span-2":""}><label className="text-xs font-semibold block mb-1">{label}</label><input type={type} value={cfg[key]||""} onChange={e=>setCfg({...cfg,[key]:e.target.value})} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper"/></div>)}
+        <div className="md:col-span-2 flex items-center gap-3 pt-2"><button onClick={save} disabled={saving} className="bg-copper text-white rounded-lg px-5 py-2.5 text-sm font-semibold flex items-center gap-2"><Check size={15}/>{saving?"Guardando...":"Guardar"}</button>{saved&&<span className="text-xs font-semibold text-green">Cambios guardados</span>}</div>
+      </div>
+      <div className="space-y-4">
+        <div className="bg-white border border-hair rounded-xl p-5"><div className="font-semibold text-sm">Políticas comerciales</div><p className="text-xs text-muted mt-2 leading-relaxed">Los precios, descuentos y políticas de envío no se modifican desde esta pantalla. Se mantienen separados para evitar cambios accidentales.</p></div>
+        <div className="bg-white border border-hair rounded-xl p-5"><div className="font-semibold text-sm">Contenido de tienda</div><p className="text-xs text-muted mt-2 mb-3">Nombre, lema y parámetros visibles que ya existían.</p><Link href="/admin/contenido" className="text-xs font-semibold text-copper">Abrir contenido →</Link></div>
+        <div className="bg-white border border-hair rounded-xl p-5"><div className="font-semibold text-sm">Reglas comerciales</div><p className="text-xs text-muted mt-2 mb-3">Configura seguimientos y alertas automáticas.</p><Link href="/admin/automatizaciones" className="text-xs font-semibold text-copper">Abrir automatizaciones →</Link></div>
+      </div>
+    </div>
+  </div>;
+}
