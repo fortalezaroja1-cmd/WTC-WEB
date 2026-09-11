@@ -120,7 +120,6 @@ export async function PUT(req: NextRequest) {
 
     if (action === "confirm") {
       const confirmed = await prisma.$transaction(async (tx) => {
-        // Evita doble descuento si dos confirmaciones llegan casi al mismo tiempo.
         await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(57392027)");
         const current = await tx.order.findUnique({
           where: { id },
@@ -174,7 +173,9 @@ export async function PUT(req: NextRequest) {
             history: { orderBy: { createdAt: "desc" } },
           },
         });
-        await tx.notification.create({ type: "order_confirmed", message: `Pedido ${current.number} confirmado` } as any);
+        await tx.notification.create({
+          data: { type: "order_confirmed", message: `Pedido ${current.number} confirmado` },
+        });
         return updated;
       });
 
@@ -189,7 +190,7 @@ export async function PUT(req: NextRequest) {
 
     const parsed = parseNotes(current.notes);
     const meta = parsed.meta;
-    let visible = publicNotes !== undefined ? String(publicNotes || "") : parsed.publicNotes;
+    const visible = publicNotes !== undefined ? String(publicNotes || "") : parsed.publicNotes;
     const data: any = {};
     const historyEntries: string[] = [];
 
@@ -203,7 +204,6 @@ export async function PUT(req: NextRequest) {
     }
     if (internalNote !== undefined) meta.internalNote = String(internalNote || "");
 
-    // Si se cancela una orden ya confirmada, liberamos automáticamente el inventario reservado.
     if (shipStatus === "CANCELLED" && meta.inventoryApplied) {
       const cancelled = await prisma.$transaction(async (tx) => {
         for (const it of current.items) {
@@ -226,7 +226,7 @@ export async function PUT(req: NextRequest) {
           data: {
             ...data,
             notes: buildNotes(meta, visible),
-            history: { create: [...historyEntries, "Inventario liberado por cancelación"].map((action) => ({ action, actor: "admin" })) },
+            history: { create: [...historyEntries, "Inventario liberado por cancelación"].map((entry) => ({ action: entry, actor: "admin" })) },
           },
           include: {
             customer: true,
