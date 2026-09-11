@@ -2,12 +2,13 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing } from "lucide-react";
+import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard },
   { href: "/admin/inbox", label: "Bandeja", icon: BellRing },
   { href: "/admin/crm", label: "CRM", icon: LayoutDashboard },
+  { href: "/admin/agente", label: "Probar agente", icon: Bot },
   { href: "/admin/tareas", label: "Tareas", icon: ClipboardList },
   { href: "/admin/automatizaciones", label: "Automatizaciones", icon: Settings },
   { href: "/admin/productos", label: "Productos", icon: Boxes },
