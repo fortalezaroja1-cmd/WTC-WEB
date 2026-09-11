@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Trello } from "lucide-react";
+import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard },
-  { href: "/admin/crm", label: "CRM", icon: Trello },
+  { href: "/admin/crm", label: "CRM", icon: LayoutDashboard },
   { href: "/admin/productos", label: "Productos", icon: Boxes },
   { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
   { href: "/admin/inventario", label: "Inventario", icon: Package },
