@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 
-const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const TOKEN_NAME = "wt_admin_token";
 const EXPIRES = "24h";
 
@@ -12,13 +11,25 @@ export interface TokenPayload {
   name: string;
 }
 
+function getJwtSecret(): string | null {
+  const secret = process.env.JWT_SECRET?.trim();
+  return secret || null;
+}
+
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
+  const secret = getJwtSecret();
+  if (!secret) {
+    throw new Error("JWT_SECRET no está configurado");
+  }
+  return jwt.sign(payload, secret, { expiresIn: EXPIRES, algorithm: "HS256" });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
+  const secret = getJwtSecret();
+  if (!secret) return null;
+
   try {
-    return jwt.verify(token, SECRET) as TokenPayload;
+    return jwt.verify(token, secret, { algorithms: ["HS256"] }) as TokenPayload;
   } catch {
     return null;
   }
