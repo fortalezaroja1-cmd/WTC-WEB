@@ -82,8 +82,6 @@ export function ensureCrmTables() {
       `);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_leadId_createdAt_idx" ON "CrmActivity"("leadId", "createdAt" DESC)`);
 
-      // Leads que ya tenían las tres marcas del sistema anterior se consideran resueltos,
-      // para no bloquear conversaciones históricas al activar el nuevo flujo obligatorio.
       await prisma.$executeRawUnsafe(`
         UPDATE "Lead"
         SET "capPending" = false,
@@ -242,4 +240,51 @@ export async function saveOutboundWhatsAppMessage(input: {
     input.text,
     sentAt
   );
+}
+
+export async function escalateUnansweredLeadsToCall() {
+  await ensureCrmTables();
+
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; name: string | null; phone: string | null; assignedSellerName: string | null }>>(`
+    UPDATE "Lead"
+    SET "capPending" = false,
+        "capC" = false,
+        "capA" = false,
+        "capP" = true,
+        "capStep" = 'P',
+        "capDecision" = 'P',
+        "capLabel" = 'LLAMADA',
+        "capNextStep" = 'Llamar al cliente por falta de respuesta',
+        "capNextAt" = NOW(),
+        "capSequence" = 'CALL',
+        "capCompletedAt" = NOW(),
+        "updatedAt" = NOW()
+    WHERE "lastOutboundAt" IS NOT NULL
+      AND "lastOutboundAt" <= NOW() - INTERVAL '24 hours'
+      AND ("lastInboundAt" IS NULL OR "lastInboundAt" < "lastOutboundAt")
+      AND "status" NOT IN ('CLOSED', 'LOST')
+      AND COALESCE("capLabel", '') <> 'LLAMADA'
+      AND COALESCE("capDecision", '') <> 'C'
+      AND NOT ("capDecision" = 'A' AND "capNextAt" IS NOT NULL AND "capNextAt" > NOW())
+    RETURNING "id", "name", "phone", "assignedSellerName"
+  `);
+
+  for (const lead of rows) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "CrmActivity" ("id", "leadId", "type", "text", "meta", "createdAt") VALUES ($1, $2, 'ESCALATION', $3, $4::jsonb, NOW())`,
+      randomUUID(),
+      lead.id,
+      "Sin respuesta durante 24h · escalado automáticamente a LLAMADA",
+      JSON.stringify({ rule: "NO_RESPONSE_24H", sequence: "CALL" })
+    );
+
+    await prisma.notification.create({
+      data: {
+        type: "crm_call_due",
+        message: `Llamar a ${lead.name || lead.phone || "cliente"}: 24h sin respuesta${lead.assignedSellerName ? ` · ${lead.assignedSellerName}` : ""}`,
+      },
+    });
+  }
+
+  return rows;
 }
