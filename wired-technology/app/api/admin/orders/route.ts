@@ -194,6 +194,15 @@ export async function PUT(req: NextRequest) {
     const data: any = {};
     const historyEntries: string[] = [];
 
+    // Confirmado y las etapas posteriores sólo pueden alcanzarse después de reservar inventario.
+    // La confirmación se hace exclusivamente con action="confirm" para evitar saltarse la validación de stock.
+    if (shipStatus === "APPROVED" && !meta.inventoryApplied) {
+      return NextResponse.json({ error: "Primero valida stock y confirma el pedido" }, { status: 409 });
+    }
+    if (["PREPARING", "SHIPPED", "DELIVERED"].includes(shipStatus) && !meta.inventoryApplied) {
+      return NextResponse.json({ error: "El pedido debe estar confirmado antes de avanzar de etapa" }, { status: 409 });
+    }
+
     if (paymentStatus) { data.paymentStatus = paymentStatus; historyEntries.push(`Pago: ${paymentStatus}`); }
     if (shipStatus) { data.shipStatus = shipStatus; historyEntries.push(`Estado: ${shipStatus}`); }
     if (guide !== undefined) { data.guide = guide; if (guide) historyEntries.push(`Guía: ${guide}`); }
