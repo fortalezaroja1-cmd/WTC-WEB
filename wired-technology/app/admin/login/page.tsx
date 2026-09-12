@@ -21,7 +21,7 @@ const LANDING = [
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@wiredtech.co");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,7 +56,7 @@ export default function AdminLoginPage() {
         <div className="bg-card rounded-xl p-6">
           <div className="mb-3">
             <label className="text-xs font-semibold text-slate-dark block mb-1">Correo</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)}
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com"
               className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" />
           </div>
           <div className="mb-2">
