@@ -114,14 +114,19 @@ async function continueConversation(input: {
     }
     if (handledByAwayMessage) return;
 
-    const bundle = await latestInboundBundle(input.leadId);
-    // Debounce: solo la última entrada de una ráfaga responde; esa respuesta ve
-    // todos los mensajes del cliente enviados desde la última salida.
-    if (bundle.latestMetaMessageId && bundle.latestMetaMessageId !== input.currentMetaMessageId) return;
+    const beforeDelay = await latestInboundBundle(input.leadId);
+    if (beforeDelay.latestMetaMessageId && beforeDelay.latestMetaMessageId !== input.currentMetaMessageId) return;
+    const timingText = beforeDelay.text || input.fallbackText;
+    if (!timingText) return;
 
-    const text = bundle.text || input.fallbackText;
-    if (!text) return;
-    if (!input.isMetaTest) await wait(naturalReplyDelay(text));
+    if (!input.isMetaTest) await wait(naturalReplyDelay(timingText));
+
+    // Se valida de nuevo después de la espera. Si el cliente mandó otro mensaje
+    // durante esos segundos, este callback se cancela y responderá el del último
+    // mensaje con toda la ráfaga concatenada.
+    const finalBundle = await latestInboundBundle(input.leadId);
+    if (finalBundle.latestMetaMessageId && finalBundle.latestMetaMessageId !== input.currentMetaMessageId) return;
+    const text = finalBundle.text || timingText;
 
     await processInboundLeadWithAgent({
       leadId: input.leadId,
@@ -198,8 +203,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Meta recibe 200 inmediatamente después de persistir el evento. Las
-    // respuestas, ausencia y agente se ejecutan en after().
     return NextResponse.json({ status: "EVENT_RECEIVED" }, { status: 200 });
   } catch (error) {
     console.error("[META_WEBHOOK] Processing error", error);
