@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables, saveOutboundWhatsAppMessage } from "@/lib/crm";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
     await ensureCrmTables();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
     const body = await request.json();
     const leadId = String(body?.leadId || "");
     const text = String(body?.text || "").trim();
@@ -91,6 +95,17 @@ export async function POST(request: NextRequest) {
       text,
       payload,
     });
+
+    // Attribution is stored on the message itself so future reassignment of the lead
+    // does not rewrite the seller history.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "CrmMessage"
+       SET "senderType" = 'HUMAN', "senderUserId" = $2, "senderUserName" = $3
+       WHERE "metaMessageId" = $1`,
+      String(metaMessageId),
+      session.userId,
+      session.name || session.email,
+    );
 
     return NextResponse.json({ ok: true, id: metaMessageId });
   } catch (error) {
