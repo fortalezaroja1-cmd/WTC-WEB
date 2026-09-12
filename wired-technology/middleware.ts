@@ -3,6 +3,21 @@ import { Permission, resolvePermissions } from "@/lib/permissions";
 
 const TOKEN_NAME = "wt_admin_token";
 
+const LANDING: Array<[Permission, string]> = [
+  ["dashboard.view", "/admin"],
+  ["inbox.view", "/admin/inbox"],
+  ["crm.view", "/admin/crm"],
+  ["tasks.view", "/admin/tareas"],
+  ["orders.view", "/admin/pedidos"],
+  ["inventory.view", "/admin/inventario"],
+  ["products.view", "/admin/productos"],
+  ["customers.view", "/admin/clientes"],
+  ["analytics.view", "/admin/analitica"],
+  ["integrations.view", "/admin/integraciones"],
+  ["settings.view", "/admin/configuracion"],
+  ["users.manage", "/admin/usuarios"],
+];
+
 function fromBase64Url(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -71,15 +86,20 @@ function unauthorized(request: NextRequest, apiRequest: boolean) {
   return response;
 }
 
-function forbidden(request: NextRequest, apiRequest: boolean) {
+function forbidden(request: NextRequest, apiRequest: boolean, role: string, permissions: Permission[]) {
   if (apiRequest) {
     return NextResponse.json({ error: "No tienes permiso para realizar esta acción" }, { status: 403 });
   }
-  return NextResponse.redirect(new URL("/admin", request.url));
+  const destination = role === "ADMIN"
+    ? "/admin"
+    : LANDING.find(([permission]) => permissions.includes(permission))?.[1] || "/";
+  if (request.nextUrl.pathname === destination) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+  return NextResponse.redirect(new URL(destination, request.url));
 }
 
 function requiredPermission(pathname: string, method: string): Permission | null {
-  // Páginas
   if (pathname.startsWith("/admin/usuarios")) return "users.manage";
   if (pathname.startsWith("/admin/inbox")) return "inbox.view";
   if (pathname.startsWith("/admin/crm")) return "crm.view";
@@ -96,7 +116,6 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/configuracion")) return "settings.view";
   if (pathname === "/admin") return "dashboard.view";
 
-  // APIs sensibles
   if (pathname.startsWith("/api/admin/users")) return "users.manage";
   if (pathname.startsWith("/api/admin/analytics")) return method === "GET" ? "analytics.view" : "analytics.export";
   if (pathname.startsWith("/api/admin/agent")) return "agent.use";
@@ -127,7 +146,7 @@ export async function middleware(request: NextRequest) {
       const role = String(payload.role || "SALES");
       const permissions = resolvePermissions(role, payload.permissions);
       if (role !== "ADMIN" && !permissions.includes(permission)) {
-        return forbidden(request, isAdminApi);
+        return forbidden(request, isAdminApi, role, permissions);
       }
     }
   }
