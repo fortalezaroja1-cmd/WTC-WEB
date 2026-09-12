@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { saveOutboundWhatsAppMessage } from "@/lib/crm";
+import { isBusinessOpen, loadBusinessHours } from "@/lib/business-hours";
 
 type AwayMessageConfig = {
   enabled: boolean;
@@ -60,55 +61,9 @@ function parseAwayConfig(raw: string | null | undefined): AwayMessageConfig {
   }
 }
 
-function parseTime(value: string, fallback: string) {
-  const match = String(value || fallback).match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return parseTime(fallback, "08:00");
-  return Math.min(23, Number(match[1])) * 60 + Math.min(59, Number(match[2]));
-}
-
-function getLocalClock(timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
-  const weekday = get("weekday");
-  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return {
-    day: dayMap[weekday] ?? 0,
-    minutes: Number(get("hour") || 0) * 60 + Number(get("minute") || 0),
-  };
-}
-
-function isOutsideBusinessHours(config: AwayMessageConfig, workStart: string, workEnd: string) {
-  const clock = getLocalClock(config.timezone);
-  if (!config.activeDays.includes(clock.day)) return true;
-
-  const start = parseTime(workStart, "08:00");
-  const end = parseTime(workEnd, "18:00");
-  if (start === end) return false;
-
-  const isOpen = start < end
-    ? clock.minutes >= start && clock.minutes < end
-    : clock.minutes >= start || clock.minutes < end;
-
-  return !isOpen;
-}
-
 async function loadConfig() {
-  const rows = await prisma.siteSetting.findMany({
-    where: { key: { in: ["awayMessageConfig", "workStart", "workEnd"] } },
-  });
-  const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]));
-  return {
-    config: parseAwayConfig(settings.awayMessageConfig),
-    workStart: settings.workStart || "08:00",
-    workEnd: settings.workEnd || "18:00",
-  };
+  const row = await prisma.siteSetting.findUnique({ where: { key: "awayMessageConfig" } });
+  return parseAwayConfig(row?.value);
 }
 
 async function wasRecentlySent(leadId: string, cooldownHours: number) {
@@ -133,10 +88,7 @@ async function sendWhatsAppAwayMessage(input: {
   const graphVersion = process.env.META_GRAPH_VERSION || "v26.0";
   const response = await fetch(`https://graph.facebook.com/${graphVersion}/${input.phoneNumberId}/messages`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       messaging_product: "whatsapp",
       recipient_type: "individual",
@@ -148,7 +100,6 @@ async function sendWhatsAppAwayMessage(input: {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.error?.message || "Meta rechazó el mensaje de ausencia");
-
   const metaMessageId = payload?.messages?.[0]?.id;
   if (!metaMessageId) throw new Error("Meta no devolvió ID para el mensaje de ausencia");
 
@@ -157,6 +108,7 @@ async function sendWhatsAppAwayMessage(input: {
     metaMessageId: String(metaMessageId),
     text: input.text,
     payload: { ...payload, kind: "away_auto_reply" },
+    senderType: "AWAY",
   });
 }
 
@@ -165,11 +117,13 @@ export async function maybeHandleAwayMessage(input: {
   whatsappId: string;
   phoneNumberId: string | null | undefined;
 }) {
-  const { config, workStart, workEnd } = await loadConfig();
-  if (!config.enabled || !isOutsideBusinessHours(config, workStart, workEnd)) return false;
+  const [config, hours] = await Promise.all([loadConfig(), loadBusinessHours()]);
+  hours.activeDays = config.activeDays;
+  hours.timezone = config.timezone;
+  if (!config.enabled || isBusinessOpen(hours)) return false;
 
-  // Aunque ya se haya respondido recientemente, seguimos bloqueando al agente normal
-  // mientras el negocio esté fuera de horario para evitar respuestas dobles o contradictorias.
+  // Fuera de horario el mensaje de ausencia bloquea al agente normal, incluso
+  // si el mismo cliente ya recibió la respuesta recientemente.
   if (await wasRecentlySent(input.leadId, config.cooldownHours)) return true;
 
   const url = normalizeUrl(config.selfServiceUrl) || getDefaultSelfServiceUrl();
@@ -182,10 +136,7 @@ export async function maybeHandleAwayMessage(input: {
 
   if (!input.phoneNumberId) {
     await prisma.notification.create({
-      data: {
-        type: "crm_away_error",
-        message: "No se pudo enviar el mensaje de ausencia: falta el phone_number_id de WhatsApp.",
-      },
+      data: { type: "crm_away_error", message: "No se pudo enviar el mensaje de ausencia: falta el phone_number_id de WhatsApp." },
     });
     return true;
   }
@@ -199,23 +150,28 @@ export async function maybeHandleAwayMessage(input: {
     });
 
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "CrmActivity" ("id", "leadId", "type", "text", "meta", "createdAt") VALUES ($1, $2, 'AWAY_AUTO_REPLY', 'Mensaje de ausencia automático enviado', $3::jsonb, NOW())`,
-      randomUUID(),
-      input.leadId,
-      JSON.stringify({ workStart, workEnd, timezone: config.timezone, selfServiceUrl: url })
+      `INSERT INTO "CrmActivity" ("id", "leadId", "type", "text", "meta", "createdAt")
+       VALUES ($1, $2, 'AWAY_AUTO_REPLY', 'Mensaje de ausencia automático enviado', $3::jsonb, NOW())`,
+      randomUUID(), input.leadId,
+      JSON.stringify({
+        weekday: `${hours.weekdayStart}-${hours.weekdayEnd}`,
+        saturday: `${hours.saturdayStart}-${hours.saturdayEnd}`,
+        timezone: hours.timezone,
+        selfServiceUrl: url,
+      })
     );
 
     await prisma.$executeRawUnsafe(
-      `UPDATE "Lead" SET "status"=CASE WHEN "status"='NEW' THEN 'CONTACTED' ELSE "status" END, "capLabel"='FUERA DE HORARIO', "capNextStep"='Retomar conversación al iniciar jornada', "capSequence"='MESSAGE', "updatedAt"=NOW() WHERE "id"=$1`,
+      `UPDATE "Lead" SET "status"=CASE WHEN "status"='NEW' THEN 'CONTACTED' ELSE "status" END,
+       "capPending"=false, "capStep"='A', "capC"=false, "capA"=true, "capP"=false,
+       "capDecision"='A', "capLabel"='FUERA DE HORARIO', "capNextStep"='Retomar conversación al iniciar jornada',
+       "capSequence"='WAITING_BUSINESS_HOURS', "updatedAt"=NOW() WHERE "id"=$1`,
       input.leadId
     );
   } catch (error: any) {
     console.error("[AWAY_MESSAGE] Send error", error);
     await prisma.notification.create({
-      data: {
-        type: "crm_away_error",
-        message: `No se pudo enviar el mensaje de ausencia: ${error?.message || "error desconocido"}`,
-      },
+      data: { type: "crm_away_error", message: `No se pudo enviar el mensaje de ausencia: ${error?.message || "error desconocido"}` },
     });
   }
 
