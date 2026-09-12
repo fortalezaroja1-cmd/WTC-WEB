@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables, saveOutboundWhatsAppMessage } from "@/lib/crm";
+import { enrichAgentTextFromContext } from "@/lib/sales-agent-context";
 import {
   evaluateSalesAgent,
   SALES_AGENT_FOLLOW_UP_HOURS,
@@ -171,13 +172,20 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
   if (!claimed.length) return { skipped: "ALREADY_PROCESSED" };
 
   const prior: SalesAgentState = lead.agentState && typeof lead.agentState === "object" ? lead.agentState : {};
-  const { decision } = await evaluateSalesAgent({ text: input.text, state: prior, lead });
+  const effectiveText = enrichAgentTextFromContext(input.text, prior);
+  const { decision } = await evaluateSalesAgent({ text: effectiveText, state: prior, lead });
 
   if (input.source === "META_TEST") {
     await persistDecision(input.leadId, { ...decision, needsHuman: true, action: `DRY_RUN_${decision.action}` });
     await addActivity(input.leadId, `Agente (prueba): ${decision.action}`, {
-      version: SALES_AGENT_VERSION, intent: decision.intent, reply: decision.reply, state: decision.state,
-      candidates: decision.candidates, missingFields: decision.missingFields,
+      version: SALES_AGENT_VERSION,
+      intent: decision.intent,
+      reply: decision.reply,
+      state: decision.state,
+      originalText: input.text,
+      effectiveText,
+      candidates: decision.candidates,
+      missingFields: decision.missingFields,
     });
     return { ok: true, dryRun: true, decision };
   }
@@ -190,6 +198,8 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
       intent: decision.intent,
       confidence: decision.confidence,
       state: decision.state,
+      originalText: input.text,
+      effectiveText,
       candidates: decision.candidates,
       missingFields: decision.missingFields,
     });
