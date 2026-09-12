@@ -10,6 +10,8 @@ export function ensureCrmTables() {
         CREATE TABLE IF NOT EXISTS "Lead" (
           "id" TEXT PRIMARY KEY,
           "whatsappId" TEXT NOT NULL,
+          "externalContactId" TEXT,
+          "channelAccountId" TEXT,
           "phone" TEXT,
           "name" TEXT,
           "channel" TEXT NOT NULL DEFAULT 'WHATSAPP',
@@ -37,6 +39,8 @@ export function ensureCrmTables() {
           "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "externalContactId" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "channelAccountId" TEXT`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "unreadCount" INTEGER NOT NULL DEFAULT 0`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastInboundAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "lastOutboundAt" TIMESTAMP(3)`);
@@ -48,7 +52,9 @@ export function ensureCrmTables() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capNextAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capSequence" TEXT`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "capCompletedAt" TIMESTAMP(3)`);
+      await prisma.$executeRawUnsafe(`UPDATE "Lead" SET "externalContactId"=COALESCE("externalContactId","whatsappId") WHERE "externalContactId" IS NULL`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Lead_whatsappId_key" ON "Lead"("whatsappId")`);
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_channel_external_idx" ON "Lead"("channel", "externalContactId", "channelAccountId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_lastMessageAt_idx" ON "Lead"("lastMessageAt" DESC)`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Lead_capNextAt_idx" ON "Lead"("capNextAt")`);
 
@@ -87,9 +93,7 @@ export function ensureCrmTables() {
         )
       `);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_leadId_createdAt_idx" ON "CrmActivity"("leadId", "createdAt" DESC)`);
-
       await prisma.$executeRawUnsafe(`UPDATE "CrmMessage" SET "senderType"='LEGACY' WHERE "direction"='OUTBOUND' AND "senderType" IS NULL`);
-
       await prisma.$executeRawUnsafe(`
         UPDATE "Lead"
         SET "capPending" = false,
@@ -108,6 +112,9 @@ export function ensureCrmTables() {
 export type InboundWhatsAppMessage = {
   metaMessageId: string;
   whatsappId: string;
+  externalContactId?: string | null;
+  channelAccountId?: string | null;
+  channel?: "WHATSAPP" | "INSTAGRAM" | "MESSENGER";
   phone?: string | null;
   name?: string | null;
   type: string;
@@ -117,20 +124,34 @@ export type InboundWhatsAppMessage = {
   payload: unknown;
 };
 
+export type InboundChannelMessage = InboundWhatsAppMessage;
+
 export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) {
   await ensureCrmTables();
+
+  const channel = input.channel || "WHATSAPP";
+  const externalContactId = String(input.externalContactId || input.whatsappId);
+  const channelAccountId = input.channelAccountId ? String(input.channelAccountId) : null;
+  const identityKey = channel === "WHATSAPP"
+    ? String(input.whatsappId)
+    : `${channel}:${channelAccountId || "default"}:${externalContactId}`;
+  const phone = channel === "WHATSAPP" ? (input.phone || externalContactId) : (input.phone || null);
+  const source = input.source || channel;
 
   const leadId = randomUUID();
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `
       INSERT INTO "Lead" (
-        "id", "whatsappId", "phone", "name", "channel", "source", "status",
+        "id", "whatsappId", "externalContactId", "channelAccountId", "phone", "name", "channel", "source", "status",
         "lastMessageText", "lastMessageAt", "lastInboundAt", "createdAt", "updatedAt"
       )
-      VALUES ($1, $2, $3, $4, 'WHATSAPP', $5, 'NEW', $6, $7, $7, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'NEW', $9, $10, $10, NOW(), NOW())
       ON CONFLICT ("whatsappId") DO UPDATE SET
+        "externalContactId" = EXCLUDED."externalContactId",
+        "channelAccountId" = EXCLUDED."channelAccountId",
         "phone" = COALESCE(EXCLUDED."phone", "Lead"."phone"),
         "name" = COALESCE(EXCLUDED."name", "Lead"."name"),
+        "channel" = EXCLUDED."channel",
         "source" = CASE WHEN "Lead"."source" = 'META_TEST' THEN EXCLUDED."source" ELSE "Lead"."source" END,
         "lastMessageText" = EXCLUDED."lastMessageText",
         "lastMessageAt" = EXCLUDED."lastMessageAt",
@@ -150,12 +171,15 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
       RETURNING "id"
     `,
     leadId,
-    input.whatsappId,
-    input.phone || input.whatsappId,
+    identityKey,
+    externalContactId,
+    channelAccountId,
+    phone,
     input.name || null,
-    input.source || "WHATSAPP",
+    channel,
+    source,
     input.text || null,
-    input.sentAt
+    input.sentAt,
   );
 
   const resolvedLeadId = rows[0]?.id;
@@ -179,17 +203,20 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
       `UPDATE "Lead" SET "unreadCount" = "unreadCount" + 1, "updatedAt" = NOW() WHERE "id" = $1`,
       resolvedLeadId
     );
-    const label = input.name || input.phone || input.whatsappId;
+    const label = input.name || input.phone || externalContactId;
+    const channelLabel = channel === "WHATSAPP" ? "WhatsApp" : channel === "INSTAGRAM" ? "Instagram" : "Messenger";
     await prisma.notification.create({
       data: {
-        type: "whatsapp_lead",
-        message: `Nuevo mensaje de WhatsApp: ${label}${input.text ? ` — ${input.text.slice(0, 120)}` : ""}`,
+        type: "channel_lead",
+        message: `Nuevo mensaje de ${channelLabel}: ${label}${input.text ? ` — ${input.text.slice(0, 120)}` : ""}`,
       },
     });
   }
 
-  return { leadId: resolvedLeadId, inserted: inserted.length > 0 };
+  return { leadId: resolvedLeadId, inserted: inserted.length > 0, channel, externalContactId, channelAccountId };
 }
+
+export const saveInboundChannelMessage = saveInboundWhatsAppMessage;
 
 export async function saveOutboundWhatsAppMessage(input: {
   leadId: string;
@@ -244,6 +271,8 @@ export async function saveOutboundWhatsAppMessage(input: {
   );
 }
 
+export const saveOutboundChannelMessage = saveOutboundWhatsAppMessage;
+
 export async function escalateUnansweredLeadsToCall() {
   await ensureCrmTables();
 
@@ -277,7 +306,6 @@ export async function escalateUnansweredLeadsToCall() {
       randomUUID(), lead.id, "Sin respuesta durante 24h · escalado automáticamente a LLAMADA",
       JSON.stringify({ rule: "NO_RESPONSE_24H", sequence: "CALL" })
     );
-
     await prisma.notification.create({
       data: {
         type: "crm_call_due",
