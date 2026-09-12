@@ -3,6 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { formatCOP, PAY_LABELS, SHIP_LABELS, SHIP_STATUSES, waLink } from "@/lib/utils";
 import { X, MessageCircle, PackageCheck, CheckCircle2, AlertTriangle, UserRound, Tag } from "lucide-react";
 
+function shippingPending(order: any) {
+  return order?.workflow?.shippingQuoted === false;
+}
+
 export default function PedidosAdmin() {
   const [orders, setOrders] = useState<any[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
@@ -106,7 +110,7 @@ export default function PedidosAdmin() {
       <div className="bg-card border border-hair rounded-xl overflow-x-auto">
         <table className="w-full text-sm min-w-[900px]">
           <thead><tr className="border-b border-hair">
-            {["Pedido", "Fecha", "Cliente", "Responsable", "Origen", "Total", "Estado", ""].map((h) => (
+            {["Pedido", "Fecha", "Cliente", "Responsable", "Origen", "Valor", "Estado", ""].map((h) => (
               <th key={h} className="text-left font-mono text-[10px] tracking-wider uppercase text-muted px-4 py-2.5">{h}</th>
             ))}
           </tr></thead>
@@ -130,7 +134,10 @@ export default function PedidosAdmin() {
                   )}
                 </td>
                 <td className="px-4 py-3"><span className="text-xs px-2 py-1 rounded-full bg-paper">{o.workflow?.origin || "Web"}</span></td>
-                <td className="px-4 py-3 font-display font-semibold">{formatCOP(Number(o.total))}</td>
+                <td className="px-4 py-3">
+                  <div className="font-display font-semibold">{formatCOP(Number(shippingPending(o) ? o.subtotal : o.total))}</div>
+                  {shippingPending(o) && <div className="text-[9px] font-semibold text-copper mt-0.5">+ envío por cotizar</div>}
+                </td>
                 <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-1 rounded-full bg-paper text-slate-dark">{SHIP_LABELS[o.shipStatus] || o.shipStatus}</span></td>
                 <td className="px-4 py-3"><button onClick={() => openOrder(o)} className="text-xs font-semibold border border-hair px-3 py-1.5 rounded-lg hover:border-copper transition-colors">Ver</button></td>
               </tr>
@@ -146,6 +153,7 @@ export default function PedidosAdmin() {
               <div>
                 <span className="font-display font-bold">Pedido {cur.number}</span>
                 <div className="font-mono text-[10px] text-muted mt-0.5">Origen: {cur.workflow?.origin || "Web"}</div>
+                {shippingPending(cur) && <div className="text-[10px] font-semibold text-copper mt-1">Envío pendiente de cotización</div>}
               </div>
               <button onClick={() => setSelected(null)}><X size={20} /></button>
             </div>
@@ -164,7 +172,7 @@ export default function PedidosAdmin() {
                 <div className="text-xs mt-1">{cur.customer?.address}, {cur.customer?.city}</div>
                 {cur.customer?.phone && (
                   <a
-                    href={waLink(cur.customer.phone, `Hola ${cur.customer?.name || ""}, recibimos tu pedido ${cur.number}. Estamos validando disponibilidad y entrega. Recuerda que puedes pagar en casa al recibir.`)}
+                    href={waLink(cur.customer.phone, `Hola ${cur.customer?.name || ""}, recibimos tu pedido ${cur.number}. Estamos validando disponibilidad y cotizando el envío. Te confirmamos el total antes del despacho. Recuerda que puedes pagar en casa al recibir.`)}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 bg-green text-white text-xs font-semibold px-3 py-2 rounded-lg mt-3 hover:opacity-90"
@@ -222,7 +230,11 @@ export default function PedidosAdmin() {
                     </div>
                   );
                 })}
-                <div className="flex justify-between font-bold pt-3"><span>Total</span><span className="font-display text-copper">{formatCOP(Number(cur.total))}</span></div>
+                <div className="space-y-1.5 pt-3 text-sm">
+                  <div className="flex justify-between"><span className="text-muted">Subtotal productos</span><span>{formatCOP(Number(cur.subtotal))}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Envío</span><span className={shippingPending(cur) ? "font-semibold text-copper" : ""}>{shippingPending(cur) ? "Por cotizar" : formatCOP(Number(cur.shipping))}</span></div>
+                  <div className="flex justify-between font-bold pt-2 border-t border-hair"><span>{shippingPending(cur) ? "Total final" : "Total"}</span><span className="font-display text-copper">{shippingPending(cur) ? "Por confirmar" : formatCOP(Number(cur.total))}</span></div>
+                </div>
 
                 {availability && (
                   <div className="mt-3 bg-paper rounded-lg p-3 text-xs">
