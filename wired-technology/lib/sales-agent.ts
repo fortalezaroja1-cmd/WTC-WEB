@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables, saveOutboundWhatsAppMessage } from "@/lib/crm";
 import { enrichAgentTextFromContext } from "@/lib/sales-agent-context";
+import { enforceOriginalSalesStrategy, type StrategicDecision } from "@/lib/sales-strategy-enforcer";
 import {
   evaluateSalesAgent,
-  SALES_AGENT_FOLLOW_UP_HOURS,
   SALES_AGENT_VERSION,
   type AgentDecision,
   type SalesAgentState,
@@ -24,6 +24,9 @@ export async function ensureAgentColumns() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "agentLastAction" TEXT`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "agentLastReplyAt" TIMESTAMP(3)`);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "agentLastInboundId" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "commercialStage" TEXT NOT NULL DEFAULT 'NUEVO'`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "timeLabel" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "followUpMode" TEXT`);
     })().catch((error) => {
       agentTablesReady = null;
       throw error;
@@ -80,78 +83,51 @@ export async function sendAgentWhatsAppText(lead: any, text: string, senderType:
   return String(metaMessageId);
 }
 
-function labelForAction(decision: AgentDecision) {
-  if (decision.action === "REQUEST_CONFIRMATION") return "POR-CONFIRMAR";
-  if (decision.action === "QUOTE_PENDING_SHIPPING") return "COTIZACIÓN PENDIENTE";
-  if (["QUALIFY", "COLLECT_QUALIFICATION", "CLARIFY_PRODUCT"].includes(decision.action)) return "EN-CALIFICACIÓN";
-  if (decision.action === "COLLECT_CLOSE_DATA") return "DATOS DE CIERRE";
-  return "ACORDADO";
-}
-
-async function persistDecision(leadId: string, decision: AgentDecision) {
-  const fallbackNextAt = new Date(Date.now() + SALES_AGENT_FOLLOW_UP_HOURS * 60 * 60 * 1000);
-  const nextAt = decision.state.nextStepAt ? new Date(decision.state.nextStepAt) : fallbackNextAt;
+async function persistDecision(leadId: string, decision: StrategicDecision | AgentDecision) {
+  const strategic = decision as StrategicDecision;
+  const stage = strategic.commercialStage || (decision.state as any)?.commercialStage || "EN-CALIFICACIÓN";
+  const timeLabel = strategic.timeLabel ?? (decision.state as any)?.timeLabel ?? null;
+  const followUpMode = strategic.followUpMode ?? (decision.state as any)?.followUpMode ?? null;
   const nextStep = decision.state.nextStep || "Revisar conversación y siguiente paso";
+  const nextAt = decision.state.nextStepAt ? new Date(decision.state.nextStepAt) : null;
   const stateJson = JSON.stringify(decision.state);
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Lead" SET
+      "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4, "agentConfidence"=$5,
+      "agentNeedsHuman"=$6, "agentLastAction"=$7, "agentLastReplyAt"=NOW(),
+      "commercialStage"=$8, "timeLabel"=$9, "followUpMode"=$10, "updatedAt"=NOW()
+     WHERE "id"=$1`,
+    leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.needsHuman,
+    decision.action, stage, timeLabel, followUpMode
+  );
 
   if (decision.cap === "C") {
     await prisma.$executeRawUnsafe(
-      `UPDATE "Lead" SET "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4,
-       "agentConfidence"=$5, "agentNeedsHuman"=$6, "agentLastAction"=$7, "agentLastReplyAt"=NOW(),
-       "capPending"=false, "capStep"='C', "capC"=true, "capA"=false, "capP"=false,
-       "capDecision"='C', "capLabel"='POR-CERRAR',
-       "capNextStep"='Validar envío, crear pedido y programar despacho. No generar guía sin confirmación.',
-       "capNextAt"=NULL, "capSequence"=NULL, "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
-      leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.needsHuman, decision.action
-    );
-    return;
-  }
-
-  if (decision.cap === "HUMAN") {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Lead" SET "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4,
-       "agentConfidence"=$5, "agentNeedsHuman"=true, "agentLastAction"=$6, "agentLastReplyAt"=NOW(),
-       "capPending"=false, "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
-       "capDecision"='P', "capLabel"='LLAMADA', "capNextStep"='Atención humana requerida por el agente',
-       "capNextAt"=NOW(), "capSequence"='CALL', "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
-      leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.action
+      `UPDATE "Lead" SET "capPending"=false, "capStep"='C', "capC"=true, "capA"=false, "capP"=false,
+       "capDecision"='C', "capLabel"='CERRAR', "capNextStep"=$2, "capNextAt"=$3,
+       "capSequence"='CLOSE', "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
+      leadId, nextStep, nextAt
     );
     return;
   }
 
   if (decision.cap === "A") {
     await prisma.$executeRawUnsafe(
-      `UPDATE "Lead" SET "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4,
-       "agentConfidence"=$5, "agentNeedsHuman"=$6, "agentLastAction"=$7, "agentLastReplyAt"=NOW(),
-       "capPending"=false, "capStep"='A', "capC"=false, "capA"=true, "capP"=false,
-       "capDecision"='A', "capLabel"=$8, "capNextStep"=$9, "capNextAt"=$10,
-       "capSequence"='WAITING_CLIENT', "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
-      leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.needsHuman,
-      decision.action, labelForAction(decision), nextStep, nextAt
+      `UPDATE "Lead" SET "capPending"=false, "capStep"='A', "capC"=false, "capA"=true, "capP"=false,
+       "capDecision"='A', "capLabel"='ACORDAR', "capNextStep"=$2, "capNextAt"=$3,
+       "capSequence"='AGREED', "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
+      leadId, nextStep, nextAt
     );
     return;
   }
 
-  if (decision.cap === "P") {
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Lead" SET "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4,
-       "agentConfidence"=$5, "agentNeedsHuman"=$6, "agentLastAction"=$7, "agentLastReplyAt"=NOW(),
-       "capPending"=false, "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
-       "capDecision"='P', "capLabel"='SEGUIMIENTO', "capNextStep"=$8, "capNextAt"=$9,
-       "capSequence"='MESSAGE', "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
-      leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.needsHuman,
-      decision.action, nextStep, nextAt
-    );
-    return;
-  }
-
+  // P = Planear. Incluye seguimiento, casos humanos y terminal PERDIDO.
   await prisma.$executeRawUnsafe(
-    `UPDATE "Lead" SET "status"=$2, "agentState"=$3::jsonb, "agentLastIntent"=$4,
-     "agentConfidence"=$5, "agentNeedsHuman"=$6, "agentLastAction"=$7, "agentLastReplyAt"=NOW(),
-     "capPending"=false, "capDecision"=CASE WHEN $2='LOST' THEN 'LOST' ELSE "capDecision" END,
-     "capLabel"=CASE WHEN $2='LOST' THEN 'PERDIDO' ELSE "capLabel" END,
-     "capNextAt"=NULL, "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
-    leadId, decision.status, stateJson, decision.intent, decision.confidence, decision.needsHuman, decision.action
+    `UPDATE "Lead" SET "capPending"=false, "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
+     "capDecision"='P', "capLabel"='PLANEAR', "capNextStep"=$2, "capNextAt"=$3,
+     "capSequence"=$4, "capCompletedAt"=NOW(), "updatedAt"=NOW() WHERE "id"=$1`,
+    leadId, nextStep, nextAt, followUpMode || (stage === "PERDIDO" ? "DONE" : "PLAN")
   );
 }
 
@@ -173,15 +149,20 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
 
   const prior: SalesAgentState = lead.agentState && typeof lead.agentState === "object" ? lead.agentState : {};
   const effectiveText = enrichAgentTextFromContext(input.text, prior);
-  const { decision } = await evaluateSalesAgent({ text: effectiveText, state: prior, lead });
+  const evaluated = await evaluateSalesAgent({ text: effectiveText, state: prior, lead });
+  const decision = await enforceOriginalSalesStrategy(input.text, evaluated.decision);
 
   if (input.source === "META_TEST") {
-    await persistDecision(input.leadId, { ...decision, needsHuman: true, action: `DRY_RUN_${decision.action}` });
+    const dryDecision = { ...decision, needsHuman: true, action: `DRY_RUN_${decision.action}` } as StrategicDecision;
+    await persistDecision(input.leadId, dryDecision);
     await addActivity(input.leadId, `Agente (prueba): ${decision.action}`, {
       version: SALES_AGENT_VERSION,
       intent: decision.intent,
       reply: decision.reply,
       state: decision.state,
+      commercialStage: decision.commercialStage,
+      timeLabel: decision.timeLabel,
+      followUpMode: decision.followUpMode,
       originalText: input.text,
       effectiveText,
       candidates: decision.candidates,
@@ -198,6 +179,9 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
       intent: decision.intent,
       confidence: decision.confidence,
       state: decision.state,
+      commercialStage: decision.commercialStage,
+      timeLabel: decision.timeLabel,
+      followUpMode: decision.followUpMode,
       originalText: input.text,
       effectiveText,
       candidates: decision.candidates,
@@ -209,7 +193,7 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
         data: {
           type: decision.cap === "C" ? "crm_ready_to_close" : "crm_agent_handoff",
           message: decision.cap === "C"
-            ? `${lead.name || lead.phone || "Lead"} quedó POR CERRAR · validar envío y programación`
+            ? `${lead.name || lead.phone || "Lead"} está en CERRAR · ${decision.state.nextStep || "revisar cierre"}`
             : `${lead.name || lead.phone || "Lead"} requiere atención humana · ${decision.action}`,
         },
       });
@@ -233,11 +217,13 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
 export async function syncLeadStageByPhone(phone: string | null | undefined, status: "SCHEDULED" | "DELIVERED" | "CLOSED" | "LOST", reason: string) {
   if (!phone) return null;
   await ensureAgentColumns();
+  const commercialStage = status === "DELIVERED" || status === "CLOSED" ? "VENDIDO" : status === "LOST" ? "PERDIDO" : "POR-CERRAR";
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `UPDATE "Lead" SET "status"=$2, "agentLastAction"='SYSTEM_STAGE_SYNC', "agentNeedsHuman"=false, "updatedAt"=NOW()
+    `UPDATE "Lead" SET "status"=$2, "commercialStage"=$3, "agentLastAction"='SYSTEM_STAGE_SYNC',
+     "agentNeedsHuman"=false, "timeLabel"=NULL, "updatedAt"=NOW()
      WHERE regexp_replace(COALESCE("phone", ''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') RETURNING "id"`,
-    phone, status
+    phone, status, commercialStage
   );
-  for (const row of rows) await addActivity(row.id, reason, { version: SALES_AGENT_VERSION, status, source: "ORDER_SYNC" });
+  for (const row of rows) await addActivity(row.id, reason, { version: SALES_AGENT_VERSION, status, commercialStage, source: "ORDER_SYNC" });
   return rows.length;
 }
