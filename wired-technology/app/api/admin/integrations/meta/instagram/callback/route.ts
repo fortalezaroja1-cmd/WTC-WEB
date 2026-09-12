@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   exchangeInstagramCode,
   fetchInstagramProfile,
+  metaGraphVersion,
   publicBaseUrl,
   saveMetaConnection,
 } from "@/lib/meta-integrations";
@@ -36,6 +37,20 @@ export async function GET(request: NextRequest) {
     const externalId = String(profile?.id || tokenData?.user_id || "");
     if (!externalId) throw new Error("No se pudo identificar la cuenta de Instagram");
 
+    let webhookSubscribed = false;
+    let webhookError: string | null = null;
+    try {
+      const subscribeUrl = new URL(`https://graph.instagram.com/${metaGraphVersion()}/${externalId}/subscribed_apps`);
+      subscribeUrl.searchParams.set("subscribed_fields", "messages,messaging_postbacks,message_reactions");
+      subscribeUrl.searchParams.set("access_token", token);
+      const response = await fetch(subscribeUrl.toString(), { method: "POST", cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      webhookSubscribed = response.ok && !payload?.error;
+      if (!webhookSubscribed) webhookError = payload?.error?.message || `HTTP ${response.status}`;
+    } catch (error: any) {
+      webhookError = error?.message || "No se pudo suscribir el webhook";
+    }
+
     await saveMetaConnection({
       channel: "INSTAGRAM",
       externalAccountId: externalId,
@@ -44,10 +59,10 @@ export async function GET(request: NextRequest) {
       accessToken: token,
       tokenExpiresAt: tokenData?.expires_in ? new Date(Date.now() + Number(tokenData.expires_in) * 1000) : null,
       scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
-      metadata: { source: "instagram_login", webhookSubscribed: false },
+      metadata: { source: "instagram_login", webhookSubscribed, webhookError },
     });
 
-    return redirect("connected=instagram");
+    return redirect(webhookSubscribed ? "connected=instagram" : `connected=instagram&warning=${encodeURIComponent(webhookError || "webhook_pending")}`);
   } catch (error: any) {
     console.error("[META_INSTAGRAM_CALLBACK]", error);
     return redirect(`error=instagram_callback&detail=${encodeURIComponent(error?.message || "Error de Instagram")}`);
