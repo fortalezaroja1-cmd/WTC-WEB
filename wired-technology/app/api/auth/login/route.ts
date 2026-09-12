@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { compare } from "bcryptjs";
 import { signToken, TOKEN_NAME } from "@/lib/auth";
+import { resolvePermissions } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
@@ -11,7 +12,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
   }
 
-  // Verificar bloqueo
   if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
     return NextResponse.json({ error: "Cuenta bloqueada. Intenta más tarde." }, { status: 423 });
   }
@@ -24,12 +24,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
   }
 
-  // Login exitoso
   await prisma.adminUser.update({ where: { id: user.id }, data: { failedAttempts: 0, lockedUntil: null, lastLogin: new Date() } });
 
-  const token = signToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
+  const permissions = resolvePermissions(user.role, user.permissions);
+  const token = signToken({ userId: user.id, email: user.email, role: user.role, name: user.name, permissions });
 
-  const res = NextResponse.json({ ok: true, name: user.name, role: user.role });
+  const res = NextResponse.json({
+    ok: true,
+    name: user.name,
+    role: user.role,
+    permissions,
+    mustChangePassword: user.mustChangePassword,
+  });
   res.cookies.set(TOKEN_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
