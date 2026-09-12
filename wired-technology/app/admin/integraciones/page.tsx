@@ -4,14 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
-  Facebook,
-  Instagram,
   LoaderCircle,
   MessageCircle,
   Plug,
   QrCode,
   RefreshCw,
   Unplug,
+  UserRound,
 } from "lucide-react";
 
 type Connection = {
@@ -208,7 +207,7 @@ export default function IntegracionesPage() {
       />
 
       <ChannelCard
-        icon={<Instagram size={24}/>} name="Instagram" subtitle="Instagram Professional"
+        icon={<UserRound size={24}/>} name="Instagram" subtitle="Instagram Professional"
         description="Inicia sesión directamente con Instagram y autoriza mensajería. Funciona con cuentas profesionales de empresa o creador."
         ready={Boolean(status?.env?.instagram?.ready)} missing={status?.env?.instagram?.missing || []}
         connections={active("INSTAGRAM")} busy={busy === "INSTAGRAM"}
@@ -217,7 +216,7 @@ export default function IntegracionesPage() {
       />
 
       <ChannelCard
-        icon={<Facebook size={24}/>} name="Facebook Messenger" subtitle="Páginas de Facebook"
+        icon={<MessageCircle size={24}/>} name="Facebook Messenger" subtitle="Páginas de Facebook"
         description="Inicia sesión con Facebook. Wired detecta las páginas administradas, activa la suscripción de mensajes y guarda cada página como canal."
         ready={Boolean(status?.env?.facebook?.ready)} missing={status?.env?.facebook?.missing || []}
         connections={active("MESSENGER")} busy={busy === "MESSENGER"}
