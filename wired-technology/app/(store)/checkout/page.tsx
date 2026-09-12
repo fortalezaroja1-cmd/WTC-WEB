@@ -23,8 +23,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
 
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const shipping = subtotal >= 250000 || subtotal === 0 ? 0 : 12000;
-  const total = subtotal + shipping;
+  // El envío nunca se presume gratis ni se estima desde el navegador.
+  // Se cotiza después con los datos reales del pedido y el destino.
+  const totalProducts = subtotal;
   const valid = form.name && form.phone && form.city && form.barrio && form.address;
 
   const handleSubmit = async () => {
@@ -42,7 +43,16 @@ export default function CheckoutPage() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer: form, items, subtotal, shipping, total, requestId, origin }),
+        body: JSON.stringify({
+          customer: form,
+          items,
+          subtotal,
+          shipping: 0,
+          total: totalProducts,
+          shippingQuoted: false,
+          requestId,
+          origin,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al crear el pedido");
@@ -72,7 +82,7 @@ export default function CheckoutPage() {
         <ArrowLeft size={13} /> SEGUIR AGREGANDO PRODUCTOS
       </Link>
       <h1 className="font-display text-2xl font-bold mb-2">Enviar pedido</h1>
-      <p className="text-sm text-muted mb-6">Arma tu pedido y déjanos tus datos. Nuestro equipo revisará disponibilidad y coordinará la entrega contigo.</p>
+      <p className="text-sm text-muted mb-6">Arma tu pedido y déjanos tus datos. Nuestro equipo revisará disponibilidad, cotizará el envío y coordinará la entrega contigo.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
@@ -80,7 +90,7 @@ export default function CheckoutPage() {
             <ShieldCheck size={18} className="text-green shrink-0 mt-0.5" />
             <div>
               <div className="text-sm font-semibold">Pago en casa / contraentrega</div>
-              <div className="text-xs text-muted mt-0.5">No necesitas crear una cuenta ni pagar para dejar tu pedido.</div>
+              <div className="text-xs text-muted mt-0.5">No necesitas crear una cuenta ni pagar para dejar tu pedido. El envío se cotiza antes de confirmar el despacho.</div>
             </div>
           </div>
 
@@ -125,7 +135,7 @@ export default function CheckoutPage() {
             {loading ? "Enviando pedido..." : "Enviar pedido"}
           </button>
           <p className="font-mono text-[10px] text-muted text-center mt-3">
-            El pedido queda pendiente de validación de disponibilidad y entrega por nuestro equipo.
+            El pedido queda pendiente de disponibilidad y cotización de envío. El valor final se confirma antes del despacho.
           </p>
         </div>
 
@@ -140,11 +150,12 @@ export default function CheckoutPage() {
               <span className="font-display font-semibold whitespace-nowrap">{formatCOP(it.price * it.qty)}</span>
             </div>
           ))}
-          <div className="flex justify-between text-sm mt-3"><span className="text-muted">Subtotal</span><span>{formatCOP(subtotal)}</span></div>
-          <div className="flex justify-between text-sm mt-1"><span className="text-muted">Envío</span><span>{shipping === 0 ? "Gratis" : formatCOP(shipping)}</span></div>
+          <div className="flex justify-between text-sm mt-3"><span className="text-muted">Subtotal productos</span><span>{formatCOP(subtotal)}</span></div>
+          <div className="flex justify-between text-sm mt-1"><span className="text-muted">Envío</span><span className="font-semibold text-copper">Por cotizar</span></div>
           <div className="flex justify-between font-bold mt-3 pt-3 border-t border-hair">
-            <span>Total</span><span className="font-display text-lg text-copper">{formatCOP(total)}</span>
+            <span>Total productos</span><span className="font-display text-lg text-copper">{formatCOP(totalProducts)}</span>
           </div>
+          <p className="text-[10px] leading-relaxed text-muted mt-2">El total final se calcula después de cotizar el envío según destino, peso y dimensiones del pedido.</p>
         </div>
       </div>
     </div>
