@@ -1,10 +1,12 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import { saveInboundWhatsAppMessage } from "@/lib/crm";
 import { processInboundLeadWithAgent } from "@/lib/sales-agent";
 import { maybeHandleAwayMessage } from "@/lib/away-message";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 function getVerifyToken() {
   return process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() || null;
@@ -12,16 +14,11 @@ function getVerifyToken() {
 
 function isValidMetaSignature(rawBody: string, signatureHeader: string | null) {
   const appSecret = process.env.META_APP_SECRET?.trim();
-
-  // La verificación criptográfica queda activa automáticamente en cuanto
-  // META_APP_SECRET esté configurado. Mientras no exista, el diagnóstico
-  // de /api/admin/system/health marcará la integración como incompleta.
   if (!appSecret) return true;
   if (!signatureHeader?.startsWith("sha256=")) return false;
 
   const received = signatureHeader.slice("sha256=".length);
   const expected = createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
-
   try {
     const receivedBuffer = Buffer.from(received, "hex");
     const expectedBuffer = Buffer.from(expected, "hex");
@@ -43,11 +40,9 @@ export async function GET(request: NextRequest) {
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
-
   if (mode === "subscribe" && token === verifyToken && challenge) {
     return new NextResponse(challenge, { status: 200 });
   }
-
   return NextResponse.json({ ok: false, error: "Webhook verification failed" }, { status: 403 });
 }
 
@@ -59,6 +54,84 @@ function getMessageText(message: any) {
   if (message?.image?.caption) return String(message.image.caption);
   if (message?.document?.caption) return String(message.document.caption);
   return message?.type ? `[${message.type}]` : null;
+}
+
+function randomMs(minSeconds: number, maxSeconds: number) {
+  return Math.round((minSeconds + Math.random() * (maxSeconds - minSeconds)) * 1000);
+}
+
+function naturalReplyDelay(text: string) {
+  const normalized = text.toLowerCase();
+  if (text.length > 180 || /\b(confirmo|comprar|lo compro|pedido|programar|direcci[oó]n)\b/.test(normalized)) return randomMs(6, 10);
+  if (/\b(precio|cu[aá]nto|stock|disponible|env[ií]o|contraentrega|flete|cable|alambre|breaker|panel)\b/.test(normalized) || /[#\d]/.test(text)) return randomMs(4, 7);
+  return randomMs(2, 4);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function latestInboundBundle(leadId: string) {
+  const leads = await prisma.$queryRawUnsafe<Array<{ lastOutboundAt: Date | null }>>(
+    `SELECT "lastOutboundAt" FROM "Lead" WHERE "id"=$1 LIMIT 1`, leadId,
+  );
+  const lastOutboundAt = leads[0]?.lastOutboundAt || new Date(0);
+  const rows = await prisma.$queryRawUnsafe<Array<{ metaMessageId: string; text: string | null; sentAt: Date }>>(
+    `SELECT "metaMessageId", "text", "sentAt"
+     FROM "CrmMessage"
+     WHERE "leadId"=$1 AND "direction"='INBOUND' AND "sentAt">$2
+     ORDER BY "sentAt" ASC, "createdAt" ASC
+     LIMIT 20`,
+    leadId, lastOutboundAt,
+  );
+  const latest = rows[rows.length - 1];
+  const texts = rows
+    .map((row) => String(row.text || "").trim())
+    .filter((text) => text && !/^\[[^\]]+\]$/.test(text));
+  return {
+    latestMetaMessageId: latest?.metaMessageId || null,
+    text: texts.join("\n").slice(0, 4000),
+  };
+}
+
+async function continueConversation(input: {
+  leadId: string;
+  currentMetaMessageId: string;
+  fallbackText: string | null;
+  source: string;
+  whatsappId: string;
+  phoneNumberId: string | null | undefined;
+  isMetaTest: boolean;
+}) {
+  try {
+    let handledByAwayMessage = false;
+    if (!input.isMetaTest) {
+      handledByAwayMessage = await maybeHandleAwayMessage({
+        leadId: input.leadId,
+        whatsappId: input.whatsappId,
+        phoneNumberId: input.phoneNumberId,
+      });
+    }
+    if (handledByAwayMessage) return;
+
+    const bundle = await latestInboundBundle(input.leadId);
+    // Debounce: solo la última entrada de una ráfaga responde; esa respuesta ve
+    // todos los mensajes del cliente enviados desde la última salida.
+    if (bundle.latestMetaMessageId && bundle.latestMetaMessageId !== input.currentMetaMessageId) return;
+
+    const text = bundle.text || input.fallbackText;
+    if (!text) return;
+    if (!input.isMetaTest) await wait(naturalReplyDelay(text));
+
+    await processInboundLeadWithAgent({
+      leadId: input.leadId,
+      metaMessageId: input.currentMetaMessageId,
+      text,
+      source: input.source,
+    });
+  } catch (error) {
+    console.error("[CRM_AFTER_RESPONSE] Processing error", error);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -92,11 +165,7 @@ export async function POST(request: NextRequest) {
             if (!message?.id || !message?.from) continue;
             const contact = contacts.find((item: any) => item?.wa_id === message.from) || contacts[0];
             const timestamp = Number(message.timestamp);
-            const sentAt = isMetaTest
-              ? new Date()
-              : Number.isFinite(timestamp)
-                ? new Date(timestamp * 1000)
-                : new Date();
+            const sentAt = isMetaTest ? new Date() : Number.isFinite(timestamp) ? new Date(timestamp * 1000) : new Date();
             const text = getMessageText(message);
             const source = isMetaTest ? "META_TEST" : "WHATSAPP";
 
@@ -113,42 +182,24 @@ export async function POST(request: NextRequest) {
             });
 
             if (saved.inserted) {
-              let handledByAwayMessage = false;
-
-              if (!isMetaTest) {
-                try {
-                  handledByAwayMessage = await maybeHandleAwayMessage({
-                    leadId: saved.leadId,
-                    whatsappId: String(message.from),
-                    phoneNumberId: value?.metadata?.phone_number_id,
-                  });
-                } catch (awayError) {
-                  // Si la evaluación de ausencia falla por un error inesperado,
-                  // dejamos que el agente normal intente responder para no perder el lead.
-                  console.error("[AWAY_MESSAGE] Processing error", awayError);
-                }
-              }
-
-              if (!handledByAwayMessage) {
-                try {
-                  await processInboundLeadWithAgent({
-                    leadId: saved.leadId,
-                    metaMessageId: String(message.id),
-                    text,
-                    source,
-                  });
-                } catch (agentError) {
-                  // El webhook debe seguir respondiendo 200 a Meta aunque el agente falle.
-                  // El motor registra el error y crea una notificación para intervención humana.
-                  console.error("[SALES_AGENT] Processing error", agentError);
-                }
-              }
+              const input = {
+                leadId: saved.leadId,
+                currentMetaMessageId: String(message.id),
+                fallbackText: text,
+                source,
+                whatsappId: String(message.from),
+                phoneNumberId: value?.metadata?.phone_number_id,
+                isMetaTest,
+              };
+              after(() => continueConversation(input));
             }
           }
         }
       }
     }
 
+    // Meta recibe 200 inmediatamente después de persistir el evento. Las
+    // respuestas, ausencia y agente se ejecutan en after().
     return NextResponse.json({ status: "EVENT_RECEIVED" }, { status: 200 });
   } catch (error) {
     console.error("[META_WEBHOOK] Processing error", error);
