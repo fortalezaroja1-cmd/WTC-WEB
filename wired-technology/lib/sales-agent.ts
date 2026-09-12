@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { ensureCrmTables, saveOutboundWhatsAppMessage } from "@/lib/crm";
+import { ensureCrmTables, saveOutboundChannelMessage } from "@/lib/crm";
+import { sendChannelText } from "@/lib/channel-messaging";
 import { enrichAgentTextFromContext } from "@/lib/sales-agent-context";
 import { enforceOriginalSalesStrategy, type StrategicDecision } from "@/lib/sales-strategy-enforcer";
 import {
@@ -43,45 +44,18 @@ async function addActivity(leadId: string, text: string, meta: unknown) {
 }
 
 export async function sendAgentWhatsAppText(lead: any, text: string, senderType: "AGENT" | "SYSTEM" = "AGENT") {
-  const token = process.env.META_WHATSAPP_ACCESS_TOKEN;
-  if (!token) throw new Error("META_WHATSAPP_ACCESS_TOKEN no configurado");
-
-  const metadataRows = await prisma.$queryRawUnsafe<Array<{ phoneNumberId: string | null }>>(
-    `SELECT "payload"->'value'->'metadata'->>'phone_number_id' AS "phoneNumberId"
-     FROM "CrmMessage"
-     WHERE "leadId" = $1 AND "direction" = 'INBOUND'
-     ORDER BY "sentAt" DESC, "createdAt" DESC LIMIT 1`,
-    lead.id
-  );
-  const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID || metadataRows[0]?.phoneNumberId;
-  if (!phoneNumberId) throw new Error("META_WHATSAPP_PHONE_NUMBER_ID no disponible");
-
-  const graphVersion = process.env.META_GRAPH_VERSION || "v26.0";
-  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: lead.whatsappId,
-      type: "text",
-      text: { preview_url: false, body: text.slice(0, 4096) },
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.error?.message || "Meta rechazó la respuesta del agente");
-  const metaMessageId = payload?.messages?.[0]?.id;
-  if (!metaMessageId) throw new Error("Meta no devolvió ID del mensaje del agente");
-
-  await saveOutboundWhatsAppMessage({
+  const sent = await sendChannelText(lead, text);
+  await saveOutboundChannelMessage({
     leadId: lead.id,
-    metaMessageId: String(metaMessageId),
+    metaMessageId: sent.messageId,
     text,
-    payload,
+    payload: sent.payload,
     senderType,
   });
-  return String(metaMessageId);
+  return sent.messageId;
 }
+
+export const sendAgentChannelText = sendAgentWhatsAppText;
 
 async function persistDecision(leadId: string, decision: StrategicDecision | AgentDecision) {
   const strategic = decision as StrategicDecision;
@@ -122,7 +96,6 @@ async function persistDecision(leadId: string, decision: StrategicDecision | Age
     return;
   }
 
-  // P = Planear. Incluye seguimiento, casos humanos y terminal PERDIDO.
   await prisma.$executeRawUnsafe(
     `UPDATE "Lead" SET "capPending"=false, "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
      "capDecision"='P', "capLabel"='PLANEAR', "capNextStep"=$2, "capNextAt"=$3,
@@ -172,7 +145,7 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
   }
 
   try {
-    await sendAgentWhatsAppText(lead, decision.reply, "AGENT");
+    await sendAgentChannelText(lead, decision.reply, "AGENT");
     await persistDecision(input.leadId, decision);
     await addActivity(input.leadId, `Agente: ${decision.action}`, {
       version: SALES_AGENT_VERSION,
@@ -193,8 +166,8 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
         data: {
           type: decision.cap === "C" ? "crm_ready_to_close" : "crm_agent_handoff",
           message: decision.cap === "C"
-            ? `${lead.name || lead.phone || "Lead"} está en CERRAR · ${decision.state.nextStep || "revisar cierre"}`
-            : `${lead.name || lead.phone || "Lead"} requiere atención humana · ${decision.action}`,
+            ? `${lead.name || lead.phone || lead.externalContactId || "Lead"} está en CERRAR · ${decision.state.nextStep || "revisar cierre"}`
+            : `${lead.name || lead.phone || lead.externalContactId || "Lead"} requiere atención humana · ${decision.action}`,
         },
       });
     }
@@ -208,7 +181,7 @@ export async function processInboundLeadWithAgent(input: { leadId: string; metaM
       version: SALES_AGENT_VERSION, error: error?.message || String(error),
     });
     await prisma.notification.create({
-      data: { type: "crm_agent_error", message: `Agente no pudo responder a ${lead.name || lead.phone || "lead"}: ${error?.message || "error"}` },
+      data: { type: "crm_agent_error", message: `Agente no pudo responder a ${lead.name || lead.phone || lead.externalContactId || "lead"}: ${error?.message || "error"}` },
     });
     throw error;
   }
