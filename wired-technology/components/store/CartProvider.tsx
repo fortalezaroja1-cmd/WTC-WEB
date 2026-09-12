@@ -127,8 +127,12 @@ function CartDrawer() {
         {items.length > 0 && (
           <div className="p-5 border-t border-hair">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-muted">Subtotal</span><span>{formatCOP(subtotal)}</span>
+              <span className="text-muted">Subtotal productos</span><span>{formatCOP(subtotal)}</span>
             </div>
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-muted">Envío</span><span className="font-semibold text-copper">Por cotizar</span>
+            </div>
+            <p className="text-[10px] text-muted mt-2">El valor final se confirma después de cotizar el envío.</p>
             <a href="/checkout"
               className="mt-3 w-full bg-copper text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-copper-bright transition-colors">
               Enviar pedido <ChevronRight size={16} />
