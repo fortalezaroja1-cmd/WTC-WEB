@@ -62,10 +62,16 @@ export function ensureCrmTables() {
           "text" TEXT,
           "payload" JSONB,
           "sentAt" TIMESTAMP(3) NOT NULL,
+          "senderType" TEXT,
+          "senderUserId" TEXT,
+          "senderUserName" TEXT,
           "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT "CrmMessage_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE CASCADE ON UPDATE CASCADE
         )
       `);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "CrmMessage" ADD COLUMN IF NOT EXISTS "senderType" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "CrmMessage" ADD COLUMN IF NOT EXISTS "senderUserId" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "CrmMessage" ADD COLUMN IF NOT EXISTS "senderUserName" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CrmMessage_metaMessageId_key" ON "CrmMessage"("metaMessageId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmMessage_leadId_sentAt_idx" ON "CrmMessage"("leadId", "sentAt" DESC)`);
 
@@ -81,6 +87,8 @@ export function ensureCrmTables() {
         )
       `);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_leadId_createdAt_idx" ON "CrmActivity"("leadId", "createdAt" DESC)`);
+
+      await prisma.$executeRawUnsafe(`UPDATE "CrmMessage" SET "senderType"='LEGACY' WHERE "direction"='OUTBOUND' AND "senderType" IS NULL`);
 
       await prisma.$executeRawUnsafe(`
         UPDATE "Lead"
@@ -156,19 +164,14 @@ export async function saveInboundWhatsAppMessage(input: InboundWhatsAppMessage) 
   const inserted = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `
       INSERT INTO "CrmMessage" (
-        "id", "metaMessageId", "leadId", "direction", "type", "text", "payload", "sentAt", "createdAt"
+        "id", "metaMessageId", "leadId", "direction", "type", "text", "payload", "sentAt", "senderType", "createdAt"
       )
-      VALUES ($1, $2, $3, 'INBOUND', $4, $5, $6::jsonb, $7, NOW())
+      VALUES ($1, $2, $3, 'INBOUND', $4, $5, $6::jsonb, $7, 'CLIENT', NOW())
       ON CONFLICT ("metaMessageId") DO NOTHING
       RETURNING "id"
     `,
-    randomUUID(),
-    input.metaMessageId,
-    resolvedLeadId,
-    input.type,
-    input.text || null,
-    JSON.stringify(input.payload ?? {}),
-    input.sentAt
+    randomUUID(), input.metaMessageId, resolvedLeadId, input.type, input.text || null,
+    JSON.stringify(input.payload ?? {}), input.sentAt
   );
 
   if (inserted.length) {
@@ -194,24 +197,25 @@ export async function saveOutboundWhatsAppMessage(input: {
   text: string;
   sentAt?: Date;
   payload?: unknown;
+  senderType?: "HUMAN" | "AGENT" | "SYSTEM" | "AWAY" | "LEGACY";
+  senderUserId?: string | null;
+  senderUserName?: string | null;
 }) {
   await ensureCrmTables();
   const sentAt = input.sentAt || new Date();
+  const senderType = input.senderType || "SYSTEM";
 
   await prisma.$queryRawUnsafe(
     `
       INSERT INTO "CrmMessage" (
-        "id", "metaMessageId", "leadId", "direction", "type", "text", "payload", "sentAt", "createdAt"
+        "id", "metaMessageId", "leadId", "direction", "type", "text", "payload", "sentAt",
+        "senderType", "senderUserId", "senderUserName", "createdAt"
       )
-      VALUES ($1, $2, $3, 'OUTBOUND', 'text', $4, $5::jsonb, $6, NOW())
+      VALUES ($1, $2, $3, 'OUTBOUND', 'text', $4, $5::jsonb, $6, $7, $8, $9, NOW())
       ON CONFLICT ("metaMessageId") DO NOTHING
     `,
-    randomUUID(),
-    input.metaMessageId,
-    input.leadId,
-    input.text,
-    JSON.stringify(input.payload ?? {}),
-    sentAt
+    randomUUID(), input.metaMessageId, input.leadId, input.text, JSON.stringify(input.payload ?? {}), sentAt,
+    senderType, input.senderUserId || null, input.senderUserName || null
   );
 
   await prisma.$executeRawUnsafe(
@@ -236,9 +240,7 @@ export async function saveOutboundWhatsAppMessage(input: {
           "updatedAt" = NOW()
       WHERE "id" = $1
     `,
-    input.leadId,
-    input.text,
-    sentAt
+    input.leadId, input.text, sentAt
   );
 }
 
@@ -272,9 +274,7 @@ export async function escalateUnansweredLeadsToCall() {
   for (const lead of rows) {
     await prisma.$executeRawUnsafe(
       `INSERT INTO "CrmActivity" ("id", "leadId", "type", "text", "meta", "createdAt") VALUES ($1, $2, 'ESCALATION', $3, $4::jsonb, NOW())`,
-      randomUUID(),
-      lead.id,
-      "Sin respuesta durante 24h · escalado automáticamente a LLAMADA",
+      randomUUID(), lead.id, "Sin respuesta durante 24h · escalado automáticamente a LLAMADA",
       JSON.stringify({ rule: "NO_RESPONSE_24H", sequence: "CALL" })
     );
 
