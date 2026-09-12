@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import { Permission, resolvePermissions } from "@/lib/permissions";
 
 const TOKEN_NAME = "wt_admin_token";
 const EXPIRES = "24h";
@@ -9,6 +10,7 @@ export interface TokenPayload {
   email: string;
   role: string;
   name: string;
+  permissions?: Permission[];
 }
 
 function getJwtSecret(): string | null {
@@ -39,7 +41,12 @@ export async function getSession(): Promise<TokenPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(TOKEN_NAME)?.value;
   if (!token) return null;
-  return verifyToken(token);
+  const session = verifyToken(token);
+  if (!session) return null;
+  return {
+    ...session,
+    permissions: resolvePermissions(session.role, session.permissions),
+  };
 }
 
 export { TOKEN_NAME };
