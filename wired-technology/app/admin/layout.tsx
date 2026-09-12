@@ -2,23 +2,24 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X } from "lucide-react";
+import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
 
 const NAV = [
-  { href: "/admin", label: "Panel", icon: LayoutDashboard },
-  { href: "/admin/inbox", label: "Bandeja", icon: BellRing },
-  { href: "/admin/crm", label: "CRM", icon: LayoutDashboard },
-  { href: "/admin/agente", label: "Probar agente", icon: Bot },
-  { href: "/admin/tareas", label: "Tareas", icon: ClipboardList },
-  { href: "/admin/automatizaciones", label: "Automatizaciones", icon: Settings },
-  { href: "/admin/productos", label: "Productos", icon: Boxes },
-  { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList },
-  { href: "/admin/inventario", label: "Inventario", icon: Package },
-  { href: "/admin/clientes", label: "Clientes", icon: Users },
-  { href: "/admin/devoluciones", label: "Devoluciones", icon: Package },
-  { href: "/admin/analitica", label: "Analítica", icon: LayoutDashboard },
-  { href: "/admin/integraciones", label: "Integraciones", icon: Settings },
-  { href: "/admin/configuracion", label: "Configuración", icon: Settings },
+  { href: "/admin", label: "Panel", icon: LayoutDashboard, permission: "dashboard.view" },
+  { href: "/admin/inbox", label: "Bandeja", icon: BellRing, permission: "inbox.view" },
+  { href: "/admin/crm", label: "CRM", icon: LayoutDashboard, permission: "crm.view" },
+  { href: "/admin/agente", label: "Probar agente", icon: Bot, permission: "agent.use" },
+  { href: "/admin/tareas", label: "Tareas", icon: ClipboardList, permission: "tasks.view" },
+  { href: "/admin/automatizaciones", label: "Automatizaciones", icon: Settings, permission: "automations.view" },
+  { href: "/admin/productos", label: "Productos", icon: Boxes, permission: "products.view" },
+  { href: "/admin/pedidos", label: "Pedidos", icon: ClipboardList, permission: "orders.view" },
+  { href: "/admin/inventario", label: "Inventario", icon: Package, permission: "inventory.view" },
+  { href: "/admin/clientes", label: "Clientes", icon: Users, permission: "customers.view" },
+  { href: "/admin/devoluciones", label: "Devoluciones", icon: Package, permission: "returns.view" },
+  { href: "/admin/analitica", label: "Analítica", icon: LayoutDashboard, permission: "analytics.view" },
+  { href: "/admin/integraciones", label: "Integraciones", icon: Settings, permission: "integrations.view" },
+  { href: "/admin/configuracion", label: "Configuración", icon: Settings, permission: "settings.view" },
+  { href: "/admin/usuarios", label: "Usuarios y permisos", icon: ShieldCheck, permission: "users.manage" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -26,9 +27,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [newOrders, setNewOrders] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [session, setSession] = useState<{ role: string; name: string; permissions: string[] } | null>(null);
 
   useEffect(() => {
     setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+    fetch("/api/admin/session", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => data && setSession(data))
+      .catch(() => {});
   }, [pathname]);
 
   useEffect(() => {
@@ -45,6 +55,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
+    if (session && session.role !== "ADMIN" && !session.permissions?.includes("orders.view")) return;
     let active = true;
     const refresh = async () => {
       try {
@@ -57,9 +68,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     refresh();
     const timer = setInterval(refresh, 30000);
     return () => { active = false; clearInterval(timer); };
-  }, [pathname]);
+  }, [pathname, session]);
 
   if (pathname === "/admin/login") return <>{children}</>;
+
+  const can = (permission: string) => !session || session.role === "ADMIN" || session.permissions?.includes(permission);
 
   const logout = async () => {
     document.cookie = "wt_admin_token=; path=/; max-age=0";
@@ -69,9 +82,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const Navigation = ({ mobile = false }: { mobile?: boolean }) => (
     <>
       <div className="p-5 pb-4 border-b border-slate-dark flex items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="font-display font-bold text-white text-[15px]">WIRED<span className="text-copper">·</span>TECH</div>
           <div className="font-mono text-[9px] tracking-[.12em] text-muted mt-0.5">PANEL ADMINISTRATIVO</div>
+          {session?.name && <div className="text-[10px] text-[#929BA6] mt-2 truncate">{session.name}</div>}
         </div>
         {mobile && (
           <button type="button" onClick={() => setMobileMenuOpen(false)} className="w-9 h-9 rounded-lg border border-slate-dark flex items-center justify-center text-white" aria-label="Cerrar menú">
@@ -80,7 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </div>
       <nav className="flex-1 p-2.5 overflow-y-auto overscroll-contain">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {NAV.filter((item) => can(item.permission)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
           const showBadge = href === "/admin/pedidos" || href === "/admin/crm" || href === "/admin/inbox";
           return (
@@ -111,7 +125,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
         <div className="font-display font-bold text-[14px]">WIRED<span className="text-copper">·</span>TECH</div>
         <div className="w-9 flex justify-end">
-          {newOrders > 0 && (
+          {newOrders > 0 && can("inbox.view") && (
             <Link href="/admin/inbox" className="min-w-6 h-6 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</Link>
           )}
         </div>
@@ -127,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       <main className="flex-1 min-w-0 w-full">
-        {newOrders > 0 && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
+        {newOrders > 0 && can("inbox.view") && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
           <Link href="/admin/inbox" className="mx-3 sm:mx-5 md:mx-7 mt-3 sm:mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
             <BellRing size={16} className="text-copper shrink-0" />
             <span>{newOrders} pedido{newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
