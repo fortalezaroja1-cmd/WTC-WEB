@@ -97,10 +97,43 @@ export const ROLE_PRESETS: Record<AdminRoleName, Permission[]> = {
   ],
 };
 
+const DEPENDENCIES: Partial<Record<Permission, Permission[]>> = {
+  "inbox.reply": ["inbox.view"],
+  "crm.manage": ["crm.view"],
+  "tasks.manage": ["tasks.view"],
+  "customers.manage": ["customers.view"],
+  "orders.manage": ["orders.view"],
+  "inventory.manage": ["inventory.view"],
+  "returns.manage": ["returns.view"],
+  "products.manage": ["products.view"],
+  "analytics.export": ["analytics.view"],
+  "analytics.view": ["orders.view"],
+  "automations.manage": ["automations.view"],
+  "integrations.manage": ["integrations.view"],
+  "settings.manage": ["settings.view"],
+};
+
 export function normalizeRole(value: unknown): AdminRoleName {
   return ["ADMIN", "SALES", "INVENTORY", "EDITOR"].includes(String(value))
     ? (String(value) as AdminRoleName)
     : "SALES";
+}
+
+export function expandPermissions(input: Permission[]): Permission[] {
+  const result = new Set<Permission>(input);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const permission of Array.from(result)) {
+      for (const dependency of DEPENDENCIES[permission] || []) {
+        if (!result.has(dependency)) {
+          result.add(dependency);
+          changed = true;
+        }
+      }
+    }
+  }
+  return Array.from(result);
 }
 
 export function resolvePermissions(role: unknown, custom: unknown): Permission[] {
@@ -109,10 +142,11 @@ export function resolvePermissions(role: unknown, custom: unknown): Permission[]
 
   if (Array.isArray(custom) && custom.length > 0) {
     const allowed = new Set(ALL_PERMISSIONS);
-    return Array.from(new Set(custom.map(String).filter((item) => allowed.has(item as Permission)))) as Permission[];
+    const selected = Array.from(new Set(custom.map(String).filter((item) => allowed.has(item as Permission)))) as Permission[];
+    return expandPermissions(selected);
   }
 
-  return [...ROLE_PRESETS[normalizedRole]];
+  return expandPermissions([...ROLE_PRESETS[normalizedRole]]);
 }
 
 export function hasPermission(role: unknown, custom: unknown, permission: Permission) {
