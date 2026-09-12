@@ -4,14 +4,26 @@ import { ensureAgentColumns, sendAgentWhatsAppText } from "@/lib/sales-agent";
 import { isBusinessOpen, loadBusinessHours } from "@/lib/business-hours";
 import { SALES_AGENT_VERSION, type SalesAgentState } from "@/lib/sales-agent-core";
 
-const FOLLOW_UP_DELAY_HOURS = 24;
+type FollowUpMode = "QUALIFICATION" | "QUOTED" | "AGREED_DATE" | "COMPARING" | "LATER" | "CALL_REQUEST" | "HUMAN";
+type ExtendedState = SalesAgentState & { followUpAttempt?: number; followUpMode?: FollowUpMode };
 
-function nextAt(hours = FOLLOW_UP_DELAY_HOURS) {
+function nextAt(hours: number) {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }
 
-function followupState(raw: unknown): SalesAgentState {
-  return raw && typeof raw === "object" ? raw as SalesAgentState : {};
+function followupState(raw: unknown): ExtendedState {
+  return raw && typeof raw === "object" ? raw as ExtendedState : {};
+}
+
+function callWindowOpen(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Bogota", weekday: "short", hour: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const weekday = parts.find((part) => part.type === "weekday")?.value || "Sun";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  if (weekday === "Sun") return false;
+  if (weekday === "Sat") return hour >= 8 && hour < 12;
+  return hour >= 8 && hour < 17;
 }
 
 async function activity(leadId: string, text: string, meta: unknown) {
@@ -22,27 +34,64 @@ async function activity(leadId: string, text: string, meta: unknown) {
   );
 }
 
-async function saveFollowupState(leadId: string, state: SalesAgentState, input: {
-  label: string;
+async function savePlan(leadId: string, state: ExtendedState, input: {
+  stage?: string;
+  timeLabel?: string | null;
+  capLabel?: string;
   nextStep: string;
   nextAt: Date | null;
   sequence: string;
   needsHuman?: boolean;
   action: string;
+  followUpMode?: FollowUpMode | null;
 }) {
+  const mode = input.followUpMode === undefined ? state.followUpMode || null : input.followUpMode;
+  const stage = input.stage || "SEGUIMIENTO";
+  const nextState = { ...state, followUpMode: mode || undefined };
   await prisma.$executeRawUnsafe(
     `UPDATE "Lead" SET
-      "agentState"=$2::jsonb,
-      "agentLastAction"=$3,
-      "agentNeedsHuman"=$4,
-      "capPending"=false,
-      "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
-      "capDecision"='P', "capLabel"=$5, "capNextStep"=$6, "capNextAt"=$7,
-      "capSequence"=$8, "capCompletedAt"=NOW(), "updatedAt"=NOW()
+      "agentState"=$2::jsonb, "agentLastAction"=$3, "agentNeedsHuman"=$4,
+      "commercialStage"=$5, "timeLabel"=$6, "followUpMode"=$7,
+      "capPending"=false, "capStep"='P', "capC"=false, "capA"=false, "capP"=true,
+      "capDecision"='P', "capLabel"=$8, "capNextStep"=$9, "capNextAt"=$10,
+      "capSequence"=$11, "capCompletedAt"=NOW(), "updatedAt"=NOW()
      WHERE "id"=$1`,
-    leadId, JSON.stringify(state), input.action, input.needsHuman === true,
-    input.label, input.nextStep, input.nextAt, input.sequence
+    leadId, JSON.stringify(nextState), input.action, input.needsHuman === true,
+    stage, input.timeLabel ?? null, mode, input.capLabel || "PLANEAR",
+    input.nextStep, input.nextAt, input.sequence
   );
+}
+
+async function markLost(lead: any, state: ExtendedState, reason: string) {
+  const nextState = { ...state, followUpAttempt: Math.max(3, Number(state.followUpAttempt || 0)), nextStep: "Sin más seguimiento", nextStepAt: undefined };
+  await prisma.$executeRawUnsafe(
+    `UPDATE "Lead" SET "status"='LOST', "commercialStage"='PERDIDO', "timeLabel"=NULL,
+     "followUpMode"=NULL, "agentState"=$2::jsonb, "agentLastAction"='FOLLOWUP_LOST',
+     "agentNeedsHuman"=false, "capPending"=false, "capStep"='P', "capC"=false, "capA"=false,
+     "capP"=true, "capDecision"='P', "capLabel"='PLANEAR', "capNextStep"=$3,
+     "capNextAt"=NULL, "capSequence"='DONE', "capCompletedAt"=NOW(), "updatedAt"=NOW()
+     WHERE "id"=$1`,
+    lead.id, JSON.stringify(nextState), reason
+  );
+  await activity(lead.id, `PERDIDO · ${reason}`, { version: SALES_AGENT_VERSION, reason });
+}
+
+async function createCallTask(lead: any, state: ExtendedState, sequence: string, attempt: number) {
+  if (!callWindowOpen()) return false;
+  const nextState = { ...state, followUpAttempt: attempt, nextStep: "Realizar llamada de seguimiento", nextStepAt: undefined };
+  await savePlan(lead.id, nextState, {
+    stage: "SEGUIMIENTO", timeLabel: "HOY", capLabel: "LLAMADA",
+    nextStep: "Llamar al cliente. Registrar si contestó o no contestó.", nextAt: null,
+    sequence, needsHuman: true, action: "FOLLOWUP_CALL", followUpMode: state.followUpMode || "QUOTED",
+  });
+  await prisma.notification.create({
+    data: {
+      type: "crm_call_due",
+      message: `Llamar a ${lead.name || lead.phone || "cliente"}${lead.assignedSellerName ? ` · ${lead.assignedSellerName}` : ""}`,
+    },
+  });
+  await activity(lead.id, "Seguimiento: llamada requerida", { version: SALES_AGENT_VERSION, attempt, sequence, mode: state.followUpMode });
+  return true;
 }
 
 export async function runSalesFollowups() {
@@ -58,6 +107,7 @@ export async function runSalesFollowups() {
       AND "capNextAt" IS NOT NULL
       AND "capNextAt" <= NOW()
       AND COALESCE("capDecision", '') IN ('A', 'P')
+      AND COALESCE("commercialStage", 'NUEVO') NOT IN ('VENDIDO', 'PERDIDO')
       AND "status" NOT IN ('CLOSED', 'DELIVERED', 'LOST')
       AND "lastOutboundAt" IS NOT NULL
       AND ("lastInboundAt" IS NULL OR "lastInboundAt" <= "lastOutboundAt")
@@ -68,59 +118,133 @@ export async function runSalesFollowups() {
   const actions: Array<{ leadId: string; action: string }> = [];
 
   for (const lead of leads) {
-    const currentState = followupState(lead.agentState);
-    // Una interacción nueva vuelve a A y reinicia la secuencia. P conserva el contador.
-    const attempt = String(lead.capDecision) === "A" ? 0 : Number(currentState.followUpAttempt || 0);
+    const state = followupState(lead.agentState);
+    const mode = (lead.followUpMode || state.followUpMode || "QUALIFICATION") as FollowUpMode;
+    const attempt = Number(state.followUpAttempt || 0);
+    state.followUpMode = mode;
 
     try {
-      if (attempt <= 0) {
-        const text = "Quedo pendiente de tu respuesta para continuar con el pedido. Si todavía lo necesitas, respóndeme por aquí y retomamos desde donde quedamos.";
-        await sendAgentWhatsAppText(lead, text, "AGENT");
-        const state = { ...currentState, followUpAttempt: 1, nextStep: "Si no responde, llamar al cliente", nextStepAt: nextAt().toISOString() };
-        await saveFollowupState(lead.id, state, {
-          label: "SEGUIMIENTO 1", nextStep: "Llamar al cliente si continúa sin respuesta", nextAt: nextAt(),
-          sequence: "MESSAGE_1", action: "FOLLOWUP_MESSAGE_1",
+      if (mode === "HUMAN") {
+        await savePlan(lead.id, state, {
+          stage: lead.commercialStage || "SEGUIMIENTO", timeLabel: "HOY", capLabel: "PLANEAR",
+          nextStep: "Atención humana pendiente", nextAt: null, sequence: "HUMAN",
+          needsHuman: true, action: "HUMAN_PENDING", followUpMode: "HUMAN",
         });
-        await activity(lead.id, "Seguimiento 1 enviado por WhatsApp", { version: SALES_AGENT_VERSION, attempt: 1 });
+        await prisma.notification.create({ data: { type: "crm_agent_handoff", message: `${lead.name || lead.phone || "Lead"} requiere atención humana` } });
+        actions.push({ leadId: lead.id, action: "HUMAN_PENDING" });
+        continue;
+      }
+
+      if (mode === "CALL_REQUEST") {
+        if (attempt <= 0) {
+          const created = await createCallTask(lead, state, "CALL_REQUEST_1", 1);
+          if (created) actions.push({ leadId: lead.id, action: "CALL_REQUEST_1" });
+          continue;
+        }
+        if (attempt === 1) {
+          const created = await createCallTask(lead, state, "CALL_REQUEST_2", 2);
+          if (created) actions.push({ leadId: lead.id, action: "CALL_REQUEST_2" });
+          continue;
+        }
+        if (attempt === 2) {
+          const text = "Te he intentado llamar. ¿A qué hora te queda bien que te contactemos?";
+          await sendAgentWhatsAppText(lead, text, "AGENT");
+          const nextState = { ...state, followUpAttempt: 3, nextStep: "Si no responde, marcar PERDIDO", nextStepAt: nextAt(24).toISOString() };
+          await savePlan(lead.id, nextState, {
+            stage: "SEGUIMIENTO", timeLabel: "MAÑANA", capLabel: "PLANEAR",
+            nextStep: "Si no responde al mensaje después de 2 llamadas, marcar PERDIDO", nextAt: nextAt(24),
+            sequence: "CALL_REQUEST_FINAL_MESSAGE", action: "CALL_REQUEST_FINAL_MESSAGE", followUpMode: mode,
+          });
+          actions.push({ leadId: lead.id, action: "CALL_REQUEST_FINAL_MESSAGE" });
+          continue;
+        }
+        await markLost(lead, state, "Sin respuesta a dos llamadas y mensaje final");
+        actions.push({ leadId: lead.id, action: "LOST" });
+        continue;
+      }
+
+      if (mode === "QUALIFICATION") {
+        if (attempt <= 0) {
+          const text = "Quedo pendiente de los datos para poder cotizarte: referencia/calibre, cantidad, ciudad/departamento y para cuándo lo necesitas.";
+          await sendAgentWhatsAppText(lead, text, "AGENT");
+          const nextState = { ...state, followUpAttempt: 1, nextStep: "Último recordatorio de calificación", nextStepAt: nextAt(48).toISOString() };
+          await savePlan(lead.id, nextState, {
+            stage: "EN-CALIFICACIÓN", timeLabel: "ESTA-SEMANA", nextStep: "Último recordatorio de calificación", nextAt: nextAt(48),
+            sequence: "QUALIFICATION_MESSAGE_1", action: "QUALIFICATION_FOLLOWUP_1", followUpMode: mode,
+          });
+          actions.push({ leadId: lead.id, action: "QUALIFICATION_MESSAGE_1" });
+          continue;
+        }
+        if (attempt === 1) {
+          const text = "¿Todavía necesitas la cotización? Si me confirmas los datos del pedido, la retomamos por aquí.";
+          await sendAgentWhatsAppText(lead, text, "AGENT");
+          const nextState = { ...state, followUpAttempt: 2, nextStep: "Si no responde, marcar PERDIDO", nextStepAt: nextAt(48).toISOString() };
+          await savePlan(lead.id, nextState, {
+            stage: "EN-CALIFICACIÓN", timeLabel: "ESTA-SEMANA", nextStep: "Si no responde, marcar PERDIDO", nextAt: nextAt(48),
+            sequence: "QUALIFICATION_FINAL_MESSAGE", action: "QUALIFICATION_FINAL_MESSAGE", followUpMode: mode,
+          });
+          actions.push({ leadId: lead.id, action: "QUALIFICATION_FINAL_MESSAGE" });
+          continue;
+        }
+        await markLost(lead, state, "No completó los datos mínimos de calificación");
+        actions.push({ leadId: lead.id, action: "LOST" });
+        continue;
+      }
+
+      // Primer seguimiento escrito según la situación comercial.
+      if (attempt <= 0) {
+        let text = `Hola ${lead.name || ""}, ¿pudiste revisar la cotización? Si tienes alguna duda o quieres ajustar cantidades, con gusto te ayudo.`.replace(/\s+,/g, ",");
+        let callDelay = 48;
+        if (mode === "COMPARING") {
+          text = "Quedo pendiente. Si estás comparando opciones, puedo ayudarte a revisar disponibilidad, entrega y condiciones para que compares sobre la misma base.";
+          callDelay = 72;
+        } else if (mode === "LATER") {
+          text = "Retomo el pedido como habíamos dejado. ¿Sigue vigente tu interés para revisar disponibilidad y cotización?";
+          callDelay = 72;
+        } else if (mode === "AGREED_DATE") {
+          text = `Hola ${lead.name || ""}, retomo lo que habíamos acordado. ¿Seguimos con el pedido?`.replace(/\s+,/g, ",");
+          callDelay = 24;
+        }
+        await sendAgentWhatsAppText(lead, text, "AGENT");
+        const nextState = { ...state, followUpAttempt: 1, nextStep: "Si no responde, realizar llamada", nextStepAt: nextAt(callDelay).toISOString() };
+        await savePlan(lead.id, nextState, {
+          stage: "SEGUIMIENTO", timeLabel: callDelay <= 24 ? "MAÑANA" : "ESTA-SEMANA",
+          nextStep: "Si no responde, realizar llamada", nextAt: nextAt(callDelay),
+          sequence: "MESSAGE_1", action: "FOLLOWUP_MESSAGE_1", followUpMode: mode,
+        });
+        await activity(lead.id, "Seguimiento 1 enviado por WhatsApp", { version: SALES_AGENT_VERSION, attempt: 1, mode });
         actions.push({ leadId: lead.id, action: "MESSAGE_1" });
         continue;
       }
 
       if (attempt === 1) {
-        const state = { ...currentState, followUpAttempt: 2, nextStep: "Realizar llamada; si no hay contacto, enviar último mensaje", nextStepAt: nextAt().toISOString() };
-        await saveFollowupState(lead.id, state, {
-          label: "LLAMADA", nextStep: "Llamar al cliente por falta de respuesta", nextAt: nextAt(),
-          sequence: "CALL", needsHuman: true, action: "FOLLOWUP_CALL",
-        });
-        await prisma.notification.create({
-          data: {
-            type: "crm_call_due",
-            message: `Llamar a ${lead.name || lead.phone || "cliente"}: segundo intento de seguimiento${lead.assignedSellerName ? ` · ${lead.assignedSellerName}` : ""}`,
-          },
-        });
-        await activity(lead.id, "Seguimiento 2: llamada requerida", { version: SALES_AGENT_VERSION, attempt: 2 });
-        actions.push({ leadId: lead.id, action: "CALL" });
+        const created = await createCallTask(lead, state, "CALL", 2);
+        if (created) actions.push({ leadId: lead.id, action: "CALL" });
         continue;
       }
 
+      // Después de una llamada registrada como NO CONTESTÓ, los modos QUOTED y AGREED_DATE
+      // esperan 5 días antes del último mensaje. COMPARING/LATER terminan en PERDIDO.
       if (attempt === 2) {
-        const text = "Te escribo por última vez para no insistir. Si todavía necesitas el material, respóndeme por este chat y retomamos tu pedido.";
+        if (mode === "COMPARING" || mode === "LATER") {
+          await markLost(lead, state, "Sin respuesta después del mensaje y la llamada de seguimiento");
+          actions.push({ leadId: lead.id, action: "LOST" });
+          continue;
+        }
+        const text = `Hola ${lead.name || ""}, ¿sigue vigente tu interés${state.productName ? ` en ${state.productName}` : ""}? Quiero saber si te reservo disponibilidad o si por ahora no lo vas a necesitar. Cualquier respuesta me sirve.`.replace(/\s+,/g, ",");
         await sendAgentWhatsAppText(lead, text, "AGENT");
-        const state = { ...currentState, followUpAttempt: 3, nextStep: "Sin más seguimiento automático", nextStepAt: undefined };
-        await saveFollowupState(lead.id, state, {
-          label: "ÚLTIMO MENSAJE", nextStep: "Sin más seguimiento automático", nextAt: null,
-          sequence: "FINAL_MESSAGE", action: "FOLLOWUP_FINAL_MESSAGE",
+        const nextState = { ...state, followUpAttempt: 3, nextStep: "Si no responde al último mensaje, marcar PERDIDO", nextStepAt: nextAt(24).toISOString() };
+        await savePlan(lead.id, nextState, {
+          stage: "SEGUIMIENTO", timeLabel: "MAÑANA", nextStep: "Si no responde al último mensaje, marcar PERDIDO", nextAt: nextAt(24),
+          sequence: "FINAL_MESSAGE", action: "FOLLOWUP_FINAL_MESSAGE", followUpMode: mode,
         });
-        await activity(lead.id, "Seguimiento 3: último mensaje enviado", { version: SALES_AGENT_VERSION, attempt: 3 });
+        await activity(lead.id, "Seguimiento 3: último mensaje enviado", { version: SALES_AGENT_VERSION, attempt: 3, mode });
         actions.push({ leadId: lead.id, action: "FINAL_MESSAGE" });
         continue;
       }
 
-      await saveFollowupState(lead.id, currentState, {
-        label: "SEGUIMIENTO FINALIZADO", nextStep: "Sin más seguimiento automático", nextAt: null,
-        sequence: "DONE", action: "FOLLOWUP_DONE",
-      });
-      actions.push({ leadId: lead.id, action: "DONE" });
+      await markLost(lead, state, "Se agotaron los intentos de seguimiento sin respuesta");
+      actions.push({ leadId: lead.id, action: "LOST" });
     } catch (error: any) {
       await activity(lead.id, "Error en seguimiento automático", { version: SALES_AGENT_VERSION, error: error?.message || String(error) });
       await prisma.notification.create({
