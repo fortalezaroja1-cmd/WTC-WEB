@@ -10,6 +10,7 @@ type OrderMeta = {
   internalNote: string;
   stockValidated: boolean;
   inventoryApplied: boolean;
+  shippingQuoted: boolean;
 };
 
 function buildNotes(meta: OrderMeta, visibleNotes: string) {
@@ -40,13 +41,24 @@ async function nextOrderNumber(tx: any) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { customer, items, subtotal, shipping, total } = body;
+    const { customer, items } = body;
     const requestId = String(body.requestId || "").trim().slice(0, 100);
     const origin = cleanOrigin(body.origin);
 
     if (!customer?.name || !customer?.phone || !customer?.address || !customer?.city || !customer?.barrio || !items?.length) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
+
+    const subtotal = Number(body.subtotal || 0);
+    if (!Number.isFinite(subtotal) || subtotal < 0) {
+      return NextResponse.json({ error: "Subtotal inválido" }, { status: 400 });
+    }
+
+    // Los pedidos armados por el cliente nunca presumen envío gratis.
+    // Hasta que logística/Skydropx cotice el flete, shipping se mantiene en 0
+    // únicamente como valor técnico y shippingQuoted=false define su significado real.
+    const shipping = 0;
+    const total = subtotal;
 
     // Idempotencia: si el navegador reintenta exactamente la misma solicitud, devolvemos la orden ya creada.
     if (requestId) {
@@ -105,6 +117,7 @@ export async function POST(req: NextRequest) {
         internalNote: "",
         stockValidated: false,
         inventoryApplied: false,
+        shippingQuoted: false,
       };
 
       const order = await tx.order.create({
@@ -128,7 +141,7 @@ export async function POST(req: NextRequest) {
             })),
           },
           history: {
-            create: { action: `Pedido nuevo · Origen: ${origin}`, actor: "cliente" },
+            create: { action: `Pedido nuevo · Origen: ${origin} · Envío por cotizar`, actor: "cliente" },
           },
         },
       });
@@ -136,7 +149,7 @@ export async function POST(req: NextRequest) {
       await tx.notification.create({
         data: {
           type: "order",
-          message: `Nuevo pedido ${orderNumber} por $${Math.round(Number(total)).toLocaleString("es-CO")}`,
+          message: `Nuevo pedido ${orderNumber} · Productos $${Math.round(subtotal).toLocaleString("es-CO")} + envío por cotizar`,
         },
       });
 
@@ -144,12 +157,12 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      await syncLeadStageByPhone(customer.phone, "SCHEDULED", `Pedido ${result.number} creado · lead movido automáticamente a Programado`);
+      await syncLeadStageByPhone(customer.phone, "SCHEDULED", `Pedido ${result.number} creado · envío pendiente de cotización`);
     } catch (syncError) {
       console.error("[CRM_STAGE_SYNC] No se pudo sincronizar pedido nuevo", syncError);
     }
 
-    return NextResponse.json({ orderNumber: result.number, orderId: result.id });
+    return NextResponse.json({ orderNumber: result.number, orderId: result.id, shippingQuoted: false });
   } catch (error: any) {
     console.error("Error creando pedido:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
