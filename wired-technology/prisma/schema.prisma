@@ -225,17 +225,20 @@ enum MovementType {
 // ─── ADMIN ──────────────────────────────────────────────
 
 model AdminUser {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  passwordHash   String
-  name           String
-  role           AdminRole @default(SALES)
-  active         Boolean   @default(true)
-  lastLogin      DateTime?
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  name               String
+  role               AdminRole @default(SALES)
+  permissions        Json      @default("[]")
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  passwordUpdatedAt  DateTime?
+  lastLogin          DateTime?
+  failedAttempts     Int       @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 enum AdminRole {
@@ -243,6 +246,19 @@ enum AdminRole {
   SALES
   INVENTORY
   EDITOR
+}
+
+model AdminAuditLog {
+  id           String   @id
+  actorUserId  String?
+  actorName    String?
+  action       String
+  targetUserId String?
+  meta         Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetUserId])
 }
 
 model Notification {
