@@ -18,13 +18,13 @@ function ConfirmationContent() {
         <h1 className="font-display text-2xl font-bold mb-1">¡Pedido recibido!</h1>
         <p className="font-mono text-sm text-muted mb-5">{orderNumber}</p>
         <p className="text-sm text-slate-dark mb-5">
-          Nuestro equipo revisará disponibilidad y los datos de entrega antes de procesar el pedido.
+          Nuestro equipo revisará disponibilidad y cotizará el envío antes de confirmar el valor final del pedido.
         </p>
         <div className="flex items-start gap-2 text-left bg-green-50 border border-green/20 rounded-lg p-3 mb-6">
           <ShieldCheck size={18} className="text-green shrink-0 mt-0.5" />
           <div>
             <div className="text-sm font-semibold">Pago en casa / contraentrega</div>
-            <div className="text-xs text-muted mt-0.5">No necesitas realizar un pago en línea para registrar esta solicitud.</div>
+            <div className="text-xs text-muted mt-0.5">No necesitas realizar un pago en línea para registrar esta solicitud. El envío está pendiente de cotización y se confirma contigo antes del despacho.</div>
           </div>
         </div>
         <Link
