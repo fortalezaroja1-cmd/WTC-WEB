@@ -4,6 +4,21 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+const LANDING = [
+  ["dashboard.view", "/admin"],
+  ["inbox.view", "/admin/inbox"],
+  ["crm.view", "/admin/crm"],
+  ["tasks.view", "/admin/tareas"],
+  ["orders.view", "/admin/pedidos"],
+  ["inventory.view", "/admin/inventario"],
+  ["products.view", "/admin/productos"],
+  ["customers.view", "/admin/clientes"],
+  ["analytics.view", "/admin/analitica"],
+  ["integrations.view", "/admin/integraciones"],
+  ["settings.view", "/admin/configuracion"],
+  ["users.manage", "/admin/usuarios"],
+] as const;
+
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("admin@wiredtech.co");
@@ -19,8 +34,16 @@ export default function AdminLoginPage() {
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
-    if (res.ok) { router.push("/admin"); }
-    else { setError(data.error || "Error"); setLoading(false); }
+    if (res.ok) {
+      const permissions: string[] = Array.isArray(data.permissions) ? data.permissions : [];
+      const destination = data.role === "ADMIN"
+        ? "/admin"
+        : LANDING.find(([permission]) => permissions.includes(permission))?.[1] || "/";
+      router.push(destination);
+    } else {
+      setError(data.error || "Error");
+      setLoading(false);
+    }
   };
 
   return (
