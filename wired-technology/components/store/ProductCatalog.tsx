@@ -205,12 +205,12 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
   return (
     <>
       <section className="bg-graphite text-white border-b border-slate-dark">
-        <div className="max-w-[1380px] mx-auto px-5 py-6 md:py-8">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-5 lg:justify-between mb-5 md:mb-6">
+        <div className="max-w-[1380px] mx-auto px-5 py-8">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-5 lg:justify-between mb-6">
             <div>
               <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold mb-2">Catálogo Wired Technology</div>
               <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">Productos</h1>
-              <p className="text-sm text-muted mt-2">{products.length} productos disponibles para consultar y agregar al pedido.</p>
+              <p className="text-sm text-muted mt-2">{products.length} productos disponibles para consultar.</p>
             </div>
             <button type="button" onClick={downloadCatalog} disabled={generating || products.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-copper px-5 py-3 font-semibold text-sm text-white hover:bg-copper-bright transition-colors disabled:opacity-60 disabled:cursor-wait">
               {generating ? <LoaderCircle size={17} className="animate-spin" /> : <Download size={17} />}
@@ -232,8 +232,8 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
         </div>
       </section>
 
-      <section className="max-w-[1380px] mx-auto px-4 sm:px-5 py-6 md:py-8">
-        <div className="flex items-center justify-between gap-4 mb-4 md:mb-5">
+      <section className="max-w-[1380px] mx-auto px-5 py-8">
+        <div className="flex items-center justify-between gap-4 mb-5">
           <p className="font-mono text-xs text-muted">Mostrando {filteredProducts.length} de {products.length} productos</p>
           {(query || activeCategory !== "Todos") && <button type="button" onClick={() => { setQuery(""); setActiveCategory("Todos"); }} className="font-mono text-xs text-copper font-semibold hover:underline">Limpiar filtros</button>}
         </div>
@@ -241,54 +241,52 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
         {filteredProducts.length === 0 ? (
           <div className="rounded-xl border border-hair bg-card py-20 text-center text-muted">No se encontraron productos con esos filtros.</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredProducts.map((product) => (
               <article key={product.id} className="group overflow-hidden rounded-2xl border border-hair bg-card shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 <Link href={`/productos/${product.slug}`} className="block">
-                  <div className="relative h-[245px] sm:h-[300px] md:h-[390px] bg-white border-b border-hair overflow-hidden">
+                  <div className="relative h-[360px] md:h-[390px] bg-white border-b border-hair overflow-hidden">
                     {product.image ? (
-                      <Image src={product.image} alt={product.name} fill className="object-contain p-2 sm:p-0 group-hover:scale-[1.02] transition-transform duration-300" sizes="(max-width:640px) 100vw, (max-width:1280px) 50vw, 33vw" />
+                      <Image src={product.image} alt={product.name} fill className="object-contain group-hover:scale-[1.02] transition-transform duration-300" sizes="(max-width:640px) 100vw, (max-width:1280px) 50vw, 33vw" />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-[#F8F5F0]"><Package size={72} strokeWidth={0.8} className="text-copper/60" /></div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#F8F5F0]"><Package size={88} strokeWidth={0.8} className="text-copper/60" /></div>
                     )}
-                    <span className="absolute left-3 top-3 sm:left-4 sm:top-4 rounded-md bg-graphite/90 px-2.5 py-1 font-mono text-[10px] text-white shadow-sm max-w-[55%] truncate">{product.category}</span>
-                    <span className="absolute right-3 top-3 sm:right-4 sm:top-4 rounded-md border border-hair bg-white/95 px-2.5 py-1 font-mono text-[10px] text-slate-dark shadow-sm max-w-[35%] truncate">{product.brand}</span>
+                    <span className="absolute left-4 top-4 rounded-md bg-graphite/90 px-2.5 py-1 font-mono text-[10px] text-white shadow-sm">{product.category}</span>
+                    <span className="absolute right-4 top-4 rounded-md border border-hair bg-white/95 px-2.5 py-1 font-mono text-[10px] text-slate-dark shadow-sm">{product.brand}</span>
                   </div>
 
-                  <div className="px-4 sm:px-5 pt-4 sm:pt-5">
-                    <div className="font-mono text-[10px] text-muted mb-1.5">{product.sku}</div>
-                    <h2 className="font-display text-[20px] sm:text-lg font-semibold leading-snug text-ink">{product.name}</h2>
-                    <p className="mt-1.5 text-[12px] sm:text-[13px] leading-relaxed text-muted line-clamp-1 sm:line-clamp-2">{product.description || `${product.brand} · ${product.unit}`}</p>
+                  <div className="px-5 pt-5">
+                    <div className="font-mono text-[10px] text-muted mb-2">{product.sku}</div>
+                    <h2 className="font-display text-lg font-semibold leading-snug text-ink">{product.name}</h2>
+                    <p className="mt-2 text-[13px] leading-relaxed text-muted line-clamp-2">{product.description || `${product.brand} · ${product.unit}`}</p>
                   </div>
                 </Link>
 
-                <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-3 sm:pt-4">
-                  <div className="flex items-end justify-between gap-3">
-                    <Link href={`/productos/${product.slug}`} className="min-w-0">
-                      <div className="font-mono text-[10px] text-muted mb-1">{product.hasVariants ? "desde" : `por ${product.unit}`}</div>
-                      <div className="font-display text-[26px] sm:text-2xl font-bold text-copper leading-none">{formatCOP(product.price)}</div>
-                    </Link>
+                <div className="px-5 pb-5 pt-5 flex items-end justify-between gap-3 min-h-[92px]">
+                  <Link href={`/productos/${product.slug}`} className="min-w-0">
+                    <div className="font-mono text-[10px] text-muted mb-1">{product.hasVariants ? "desde" : `por ${product.unit}`}</div>
+                    <div className="font-display text-2xl font-bold text-copper">{formatCOP(product.price)}</div>
+                  </Link>
 
+                  <div className="flex items-center gap-2 shrink-0">
                     {product.totalStock <= 0 ? (
                       <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-alert">Agotado</span>
                     ) : product.totalStock <= 5 ? (
-                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Últimas {product.totalStock}</span>
+                      <span className="hidden sm:inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Últimas {product.totalStock}</span>
                     ) : (
-                      <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green">Disponible</span>
+                      <span className="hidden sm:inline-flex rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green">Disponible</span>
                     )}
-                  </div>
 
-                  {product.totalStock > 0 && product.hasVariants ? (
-                    <Link href={`/productos/${product.slug}`} aria-label={`Elegir opciones de ${product.name}`} className="mt-4 h-12 w-full rounded-xl border border-copper bg-white text-copper inline-flex items-center justify-center gap-2 text-sm font-bold active:scale-[.98] transition-transform">
-                      <SlidersHorizontal size={18} /> Elegir opciones
-                    </Link>
-                  ) : product.totalStock > 0 ? (
-                    <button type="button" onClick={() => quickAdd(product)} aria-label={`Agregar ${product.name} al carrito`} className="mt-4 h-12 w-full rounded-xl bg-copper text-white inline-flex items-center justify-center gap-2 text-sm font-bold shadow-sm active:scale-[.98] transition-transform">
-                      <Plus size={20} strokeWidth={2.5} /> Agregar al pedido
-                    </button>
-                  ) : (
-                    <button type="button" disabled className="mt-4 h-12 w-full rounded-xl bg-paper text-muted inline-flex items-center justify-center text-sm font-semibold">No disponible</button>
-                  )}
+                    {product.totalStock > 0 && product.hasVariants ? (
+                      <Link href={`/productos/${product.slug}`} aria-label={`Ver opciones de ${product.name}`} className="h-11 px-3 rounded-xl border border-copper text-copper bg-white inline-flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 transition-transform">
+                        <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Opciones</span>
+                      </Link>
+                    ) : product.totalStock > 0 ? (
+                      <button type="button" onClick={() => quickAdd(product)} aria-label={`Agregar ${product.name} al carrito`} className="h-11 w-11 rounded-xl bg-copper text-white inline-flex items-center justify-center shadow-sm active:scale-95 transition-transform">
+                        <Plus size={23} strokeWidth={2.4} />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             ))}
