@@ -16,8 +16,8 @@ function permissions(role: unknown, value: unknown) {
   const r = normalizeRole(role);
   if (r === "ADMIN") return [...ALL_PERMISSIONS];
   if (!Array.isArray(value)) return resolvePermissions(r, []);
-  const allowed = new Set(ALL_PERMISSIONS);
-  return Array.from(new Set(value.map(String).filter((x) => allowed.has(x as any))));
+  const allowed = new Set<string>(ALL_PERMISSIONS);
+  return Array.from(new Set(value.map(String).filter((x) => allowed.has(x))));
 }
 
 export async function GET() {
