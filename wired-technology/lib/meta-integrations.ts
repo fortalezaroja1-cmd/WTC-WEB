@@ -174,7 +174,7 @@ export async function fetchFacebookPages(userToken: string) {
 
 export async function fetchFacebookPageProfile(pageToken: string) {
   const url = new URL(`https://graph.facebook.com/${metaGraphVersion()}/me`);
-  url.searchParams.set("fields", "id,name");
+  url.searchParams.set("fields", "id");
   url.searchParams.set("access_token", pageToken);
   return jsonFetch(url.toString());
 }
