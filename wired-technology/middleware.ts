@@ -117,6 +117,7 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname === "/admin") return "dashboard.view";
 
   if (pathname.startsWith("/api/admin/users")) return "users.manage";
+  if (pathname.startsWith("/api/admin/invitations")) return "users.manage";
   if (pathname.startsWith("/api/admin/analytics")) return method === "GET" ? "analytics.view" : "analytics.export";
   if (pathname.startsWith("/api/admin/agent")) return "agent.use";
   if (pathname.startsWith("/api/admin/crm/messages")) return method === "POST" ? "inbox.reply" : "inbox.view";
