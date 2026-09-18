@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function InvitationPage(){
+function InvitationForm(){
  const params=useSearchParams(); const token=params.get("token")||"";
  const [info,setInfo]=useState<any>(null),[password,setPassword]=useState(""),[confirm,setConfirm]=useState(""),[error,setError]=useState(""),[done,setDone]=useState(false),[saving,setSaving]=useState(false);
  useEffect(()=>{ if(!token){setError("Invitación inválida");return;} fetch("/api/invitations/accept?token="+encodeURIComponent(token),{cache:"no-store"}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setInfo(d)}).catch(e=>setError(e.message));},[token]);
@@ -15,3 +15,5 @@ export default function InvitationPage(){
   {info&&<div className="space-y-3"><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Crea una contraseña" className="w-full border border-hair rounded-lg px-3 py-3"/><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="Repite la contraseña" className="w-full border border-hair rounded-lg px-3 py-3"/><button onClick={submit} disabled={saving} className="w-full bg-copper text-white rounded-lg py-3 font-semibold disabled:opacity-50">{saving?"Creando...":"Crear mi cuenta"}</button></div>}</>}
  </div></main>
 }
+
+export default function InvitationPage(){ return <Suspense fallback={<main className="min-h-screen bg-paper"/>}><InvitationForm/></Suspense>; }
