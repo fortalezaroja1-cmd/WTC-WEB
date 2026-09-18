@@ -61,6 +61,7 @@ export default function UsuariosPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [copied, setCopied] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState("");
 
   const isEditing = Boolean(form.id);
 
@@ -132,6 +133,15 @@ export default function UsuariosPage() {
     await navigator.clipboard.writeText(form.password);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  };
+
+  const createInvite = async () => {
+    setSaving(true); setError(""); setSuccess(""); setInviteUrl("");
+    try {
+      const res = await fetch("/api/admin/invitations", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name:form.name,email:form.email,role:form.role,permissions:form.role==="ADMIN"?ALL_PERMISSIONS:form.permissions }) });
+      const data = await res.json(); if(!res.ok) throw new Error(data.error || "No se pudo crear la invitación");
+      setInviteUrl(data.inviteUrl); setSuccess("Invitación creada. Copia el enlace y envíaselo a la persona.");
+    } catch(e:any){ setError(e.message || "No se pudo crear la invitación"); } finally { setSaving(false); }
   };
 
   const save = async () => {
@@ -257,6 +267,7 @@ export default function UsuariosPage() {
 
             {error && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 text-alert px-3 py-2.5 text-xs">{error}</div>}
             {success && <div className="mb-4 rounded-lg border border-green/20 bg-green-50 text-green px-3 py-2.5 text-xs font-semibold flex items-center gap-2"><Check size={14}/>{success}</div>}
+            {inviteUrl && <div className="mb-4 rounded-lg border border-copper/30 bg-paper p-3"><div className="text-[11px] font-semibold mb-2">Link de invitación · válido 7 días y de un solo uso</div><div className="flex gap-2"><input readOnly value={inviteUrl} className="flex-1 min-w-0 border border-hair rounded-lg px-3 py-2 text-xs"/><button onClick={async()=>{await navigator.clipboard.writeText(inviteUrl);setCopied(true);setTimeout(()=>setCopied(false),1800)}} className="px-3 rounded-lg border border-hair bg-white text-xs font-semibold">{copied?"Copiado":"Copiar"}</button></div></div>}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block">
@@ -333,9 +344,12 @@ export default function UsuariosPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-6">
             <div className="text-[11px] text-muted">Los cambios de permisos se aplican al próximo inicio de sesión del usuario.</div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!isEditing && <button onClick={createInvite} disabled={saving || !form.name.trim() || !form.email.trim()} className="border border-copper text-copper bg-white rounded-lg px-5 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-40"><Copy size={15}/> Crear link de invitación</button>}
             <button onClick={save} disabled={saving || !form.name.trim() || !form.email.trim()} className="bg-copper text-white rounded-lg px-5 py-3 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-40">
               <Check size={16}/>{saving ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear usuario"}
             </button>
+            </div>
           </div>
         </section>
       </div>
