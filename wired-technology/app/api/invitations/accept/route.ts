@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   if (existing) return NextResponse.json({ error:"Ya existe una cuenta con este correo" }, { status:409 });
   const passwordHash=await hash(password,12);
   await prisma.$transaction([
-    prisma.adminUser.create({ data:{ name:invite.name,email:invite.email,passwordHash,role:invite.role,permissions:invite.permissions,active:true,mustChangePassword:false,passwordUpdatedAt:new Date() }}),
+    prisma.adminUser.create({ data:{ name:invite.name,email:invite.email,passwordHash,role:invite.role,permissions:(Array.isArray(invite.permissions) ? invite.permissions : []),active:true,mustChangePassword:false,passwordUpdatedAt:new Date() }}),
     prisma.adminInvite.update({ where:{ id:invite.id }, data:{ usedAt:new Date() }})
   ]);
   return NextResponse.json({ ok:true });
