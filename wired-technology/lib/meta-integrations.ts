@@ -41,6 +41,7 @@ export function metaEnvStatus(origin?: string) {
   const facebookAppId = process.env.META_APP_ID?.trim() || "";
   const instagramAppId = process.env.META_INSTAGRAM_APP_ID?.trim() || facebookAppId;
   const appSecret = process.env.META_APP_SECRET?.trim() || "";
+  const pageAccessToken = process.env.META_PAGE_ACCESS_TOKEN?.trim() || "";
   const instagramSecret = process.env.META_INSTAGRAM_APP_SECRET?.trim() || appSecret;
   const whatsappConfigId = process.env.META_WHATSAPP_CONFIG_ID?.trim() || "";
 
@@ -48,10 +49,10 @@ export function metaEnvStatus(origin?: string) {
     graphVersion: metaGraphVersion(),
     baseUrl: base,
     facebook: {
-      ready: Boolean(facebookAppId && appSecret && base),
+      ready: Boolean(base && pageAccessToken || (facebookAppId && appSecret && base)),
       appId: facebookAppId || null,
       callbackUrl: base ? `${base}/api/admin/integrations/meta/facebook/callback` : null,
-      missing: [!facebookAppId && "META_APP_ID", !appSecret && "META_APP_SECRET", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
+      missing: [!pageAccessToken && !facebookAppId && "META_APP_ID", !pageAccessToken && !appSecret && "META_APP_SECRET/META_PAGE_ACCESS_TOKEN", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
     },
     instagram: {
       ready: Boolean(instagramAppId && instagramSecret && base),
@@ -169,6 +170,13 @@ export async function fetchFacebookPages(userToken: string) {
   url.searchParams.set("access_token", userToken);
   const data = await jsonFetch(url.toString());
   return Array.isArray(data?.data) ? data.data : [];
+}
+
+export async function fetchFacebookPageProfile(pageToken: string) {
+  const url = new URL(`https://graph.facebook.com/${metaGraphVersion()}/me`);
+  url.searchParams.set("fields", "id,name");
+  url.searchParams.set("access_token", pageToken);
+  return jsonFetch(url.toString());
 }
 
 export async function subscribeFacebookPage(pageId: string, pageToken: string) {
