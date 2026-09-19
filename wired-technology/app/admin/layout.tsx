@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import WiredAssistant from "@/components/WiredAssistant";
 import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
 
 const NAV = [
@@ -149,6 +150,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
         <div className="p-3 sm:p-5 md:p-7 min-w-0">{children}</div>
       </main>
+      <WiredAssistant audience="team" />
     </div>
   );
 }
