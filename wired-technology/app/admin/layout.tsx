@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import WiredAssistant from "@/components/WiredAssistant";
+import AdminGlobalSearch from "@/components/AdminGlobalSearch";
 import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
 
 const NAV = [
@@ -153,7 +154,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span>{counts.newOrders} pedido{counts.newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
           </Link>
         )}
-        <div className="p-3 sm:p-5 md:p-7 min-w-0">{children}</div>
+        <div className="p-3 sm:p-5 md:p-7 min-w-0"><AdminGlobalSearch />{children}</div>
       </main>
       <WiredAssistant audience="team" />
     </div>
