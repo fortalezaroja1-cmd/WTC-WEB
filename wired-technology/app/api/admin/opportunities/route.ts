@@ -92,9 +92,9 @@ export async function POST(req: NextRequest) {
     const id = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "Opportunity" (
-        "id","leadId","customerId","customerName","phone","email","city","title","value","stage","source",
+        "id","leadId","customerId","customerName","phone","email","city","address","title","value","stage","source",
         "assignedSellerId","assignedSellerName","priority","nextAction","nextAt","notes","createdAt","updatedAt"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())`,
       id,
       body?.leadId || null,
       matchedCustomer?.id || body?.customerId || null,
@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
       body?.phone || matchedCustomer?.phone || null,
       body?.email || matchedCustomer?.email || null,
       body?.city || matchedCustomer?.city || null,
+      body?.address || matchedCustomer?.address || null,
       title || `Venta · ${customerName || body?.phone || "Cliente"}`,
       Number(body?.value || 0),
       stage,
@@ -135,7 +136,7 @@ export async function PUT(req: NextRequest) {
     const current = currentRows[0];
     if (!current) return NextResponse.json({ error: "Oportunidad no encontrada" }, { status: 404 });
 
-    const allowed = ["customerName","phone","email","city","title","value","stage","source","assignedSellerId","assignedSellerName","priority","nextAction","nextAt","lossReason","notes"];
+    const allowed = ["customerName","phone","email","city","address","title","value","stage","source","assignedSellerId","assignedSellerName","priority","nextAction","nextAt","lossReason","notes"];
     const sets: string[] = [];
     const values: any[] = [id];
     for (const key of allowed) {
