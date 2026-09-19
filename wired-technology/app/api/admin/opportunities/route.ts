@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { addSalesActivity, ensureSalesTables, OPPORTUNITY_STAGES, syncOpportunitiesFromLeads } from "@/lib/sales-system";
+import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,7 @@ export async function POST(req: NextRequest) {
       body?.notes || null,
     );
     await addSalesActivity({ opportunityId: id, type: "CREATED", text: "Oportunidad creada", actorUserId: session.userId, actorName: session.name });
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "OPPORTUNITY_CREATED", meta: { opportunityId: id, customerName, stage, value: Number(body?.value || 0) } });
     const item = await getOne(id);
     return NextResponse.json(item, { status: 201 });
   } catch (error: any) {
@@ -178,6 +180,7 @@ export async function PUT(req: NextRequest) {
     if (body.stage === "WON" && current.stage !== "WON") {
       await prisma.notification.create({ data: { type: "opportunity_won", message: `Venta ganada: ${current.customerName || current.title}` } });
     }
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "OPPORTUNITY_UPDATED", meta: { opportunityId: id, changes, stage: nextStage } });
 
     return NextResponse.json(await getOne(id));
   } catch (error: any) {
