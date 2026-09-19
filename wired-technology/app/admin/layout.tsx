@@ -4,11 +4,12 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import WiredAssistant from "@/components/WiredAssistant";
 import AdminGlobalSearch from "@/components/AdminGlobalSearch";
-import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
+import { Activity, LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard, permission: "dashboard.view" },
   { href: "/admin/notificaciones", label: "Notificaciones", icon: BellRing, permission: "dashboard.view" },
+  { href: "/admin/actividad", label: "Actividad", icon: Activity, permission: "dashboard.view" },
   { href: "/admin/inbox", label: "Bandeja", icon: BellRing, permission: "inbox.view" },
   { href: "/admin/crm", label: "CRM", icon: LayoutDashboard, permission: "crm.view" },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: ClipboardList, permission: "crm.view" },
