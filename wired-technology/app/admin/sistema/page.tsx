@@ -23,6 +23,6 @@ export default function SistemaPage(){
       <div className="px-4 py-3 border-b border-hair flex items-center justify-between"><div><h2 className="font-semibold text-sm">Comprobaciones</h2><p className="text-[10px] text-muted mt-0.5">Revisión {data.revision||"—"} · {data.environment||"—"}</p></div><span className={"text-[10px] font-semibold rounded-full px-2 py-1 "+(data.ok?"bg-green-50 text-green":"bg-red-50 text-alert")}>{data.ok?"OPERATIVO":"REVISAR"}</span></div>
       <div className="divide-y divide-hair">{(data.checks||[]).map((x:any)=><div key={x.key} className="p-4 flex items-start gap-3">{x.status==="OK"?<CheckCircle2 size={18} className="text-green shrink-0"/>:<TriangleAlert size={18} className={x.status==="ERROR"?"text-alert shrink-0":"text-copper shrink-0"}/>}<div><div className="text-sm font-semibold">{x.label}</div><div className="text-xs text-muted mt-1">{x.detail}</div></div></div>)}</div>
     </section>
-    <div className="mt-4 text-[11px] text-muted leading-relaxed">La prueba segura crea temporalmente una oportunidad, una cotización y una actividad dentro de una transacción y luego revierte todo. Sirve para comprobar escritura y relaciones sin dejar información falsa.</div></>}
+    <div className="mt-4 text-[11px] text-muted leading-relaxed">La prueba segura recorre temporalmente cliente → oportunidad → cotización → pedido → actividad dentro de una transacción y luego revierte todo. Comprueba el flujo comercial sin dejar información falsa.</div></>}
   </div>
 }
