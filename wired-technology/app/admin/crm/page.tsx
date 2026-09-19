@@ -139,6 +139,17 @@ export default function CrmPage() {
     {current&&<div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={()=>{setSelected(null);setDetail(null)}}><aside className="w-[500px] max-w-[96vw] h-full bg-white shadow-xl overflow-y-auto" onClick={e=>e.stopPropagation()}>
       <div className="sticky top-0 bg-white z-10 border-b border-hair p-5 flex items-start justify-between gap-3"><div><div className="text-[10px] uppercase tracking-wider text-copper font-semibold">{current.stage}</div><h2 className="font-display text-xl font-bold mt-1">{current.customerName||current.title}</h2><div className="text-xs text-muted mt-1">{current.phone||"Sin teléfono"} · {current.source||"Manual"}</div></div><button onClick={()=>{setSelected(null);setDetail(null)}} className="p-2"><X size={19}/></button></div>
       <div className="p-5 space-y-5">
+        <section className="rounded-xl border border-hair p-4">
+          <div className="text-xs font-semibold mb-3">Datos comerciales del cliente</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Nombre"><input defaultValue={current.customerName||""} onBlur={e=>update(current.id,{customerName:e.target.value})} className={inputClass}/></Field>
+            <Field label="Teléfono"><input defaultValue={current.phone||""} onBlur={e=>update(current.id,{phone:e.target.value})} className={inputClass}/></Field>
+            <Field label="Email"><input defaultValue={current.email||""} onBlur={e=>update(current.id,{email:e.target.value})} className={inputClass}/></Field>
+            <Field label="Ciudad"><input defaultValue={current.city||""} onBlur={e=>update(current.id,{city:e.target.value})} className={inputClass}/></Field>
+            <div className="sm:col-span-2"><Field label="Dirección"><input defaultValue={current.address||""} onBlur={e=>update(current.id,{address:e.target.value})} className={inputClass}/></Field></div>
+          </div>
+          <div className="text-[10px] text-muted mt-2">Estos datos se usan al convertir una cotización en pedido.</div>
+        </section>
         <section className="grid grid-cols-2 gap-3">
           <Field label="Valor"><input type="number" defaultValue={Number(current.value||0)} onBlur={e=>update(current.id,{value:Number(e.target.value||0)})} className={inputClass}/></Field>
           <Field label="Prioridad"><select value={current.priority||"MEDIUM"} onChange={e=>update(current.id,{priority:e.target.value})} className={inputClass}><option value="LOW">Baja</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option></select></Field>
