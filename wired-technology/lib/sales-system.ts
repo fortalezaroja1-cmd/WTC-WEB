@@ -33,6 +33,7 @@ export async function ensureSalesTables() {
           "phone" TEXT,
           "email" TEXT,
           "city" TEXT,
+          "address" TEXT,
           "title" TEXT NOT NULL,
           "value" NUMERIC(12,2) NOT NULL DEFAULT 0,
           "stage" TEXT NOT NULL DEFAULT 'NEW',
@@ -50,6 +51,7 @@ export async function ensureSalesTables() {
           "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "address" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_stage_idx" ON "Opportunity"("stage")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_assigned_idx" ON "Opportunity"("assignedSellerId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_nextAt_idx" ON "Opportunity"("nextAt")`);
@@ -146,10 +148,10 @@ export async function syncOpportunitiesFromLeads() {
   const leads = await prisma.$queryRawUnsafe<any[]>(`
     SELECT l."id",l."name",l."phone",l."source",l."status",l."assignedSellerId",l."assignedSellerName",
            l."capNextStep",l."capNextAt",l."createdAt",l."updatedAt",
-           c."id" AS "customerId",c."name" AS "customerRecordName",c."email",c."city"
+           c."id" AS "customerId",c."name" AS "customerRecordName",c."email",c."city",c."address"
     FROM "Lead" l
     LEFT JOIN LATERAL (
-      SELECT "id","name","email","city"
+      SELECT "id","name","email","city","address"
       FROM "Customer"
       WHERE "phone" = l."phone" AND l."phone" IS NOT NULL
       ORDER BY "updatedAt" DESC
@@ -164,15 +166,16 @@ export async function syncOpportunitiesFromLeads() {
     const title = lead.name ? `Venta · ${lead.name}` : `Oportunidad · ${lead.phone || "Cliente"}`;
     await prisma.$executeRawUnsafe(
       `INSERT INTO "Opportunity" (
-        "id","leadId","customerId","customerName","phone","email","city","title","stage","source","assignedSellerId","assignedSellerName",
+        "id","leadId","customerId","customerName","phone","email","city","address","title","stage","source","assignedSellerId","assignedSellerName",
         "nextAction","nextAt","createdAt","updatedAt"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       ON CONFLICT ("leadId") DO UPDATE SET
         "customerId"=COALESCE(EXCLUDED."customerId","Opportunity"."customerId"),
         "customerName"=COALESCE(EXCLUDED."customerName","Opportunity"."customerName"),
         "phone"=COALESCE(EXCLUDED."phone","Opportunity"."phone"),
         "email"=COALESCE(EXCLUDED."email","Opportunity"."email"),
         "city"=COALESCE(EXCLUDED."city","Opportunity"."city"),
+        "address"=COALESCE(EXCLUDED."address","Opportunity"."address"),
         "source"=COALESCE(EXCLUDED."source","Opportunity"."source"),
         "assignedSellerId"=COALESCE(EXCLUDED."assignedSellerId","Opportunity"."assignedSellerId"),
         "assignedSellerName"=COALESCE(EXCLUDED."assignedSellerName","Opportunity"."assignedSellerName"),
@@ -190,6 +193,7 @@ export async function syncOpportunitiesFromLeads() {
       lead.phone || null,
       lead.email || null,
       lead.city || null,
+      lead.address || null,
       title,
       stage,
       lead.source || "CRM",
