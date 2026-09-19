@@ -21,7 +21,7 @@ export default function PedidosAdmin() {
   };
 
   useEffect(() => {
-    loadOrders();
+    loadOrders().then(()=>{ const id=new URLSearchParams(window.location.search).get("orderId"); if(id) setSelected(id); });
     fetch("/api/admin/sales-users", { cache: "no-store" })
       .then((r) => r.ok ? r.json() : [])
       .then(setSellers)
