@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables } from "@/lib/crm";
 import { ensureSalesTables, syncOpportunitiesFromLeads } from "@/lib/sales-system";
+import { runCommercialAutomations } from "@/lib/commercial-automations";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export async function GET(){
     await ensureCrmTables();
     await ensureSalesTables();
     await syncOpportunitiesFromLeads();
+    await runCommercialAutomations();
     const [newOrders,unreadRows,newOppRows,notifications]=await Promise.all([
       prisma.order.count({where:{shipStatus:"PENDING_PAYMENT"}}),
       prisma.$queryRawUnsafe<Array<{count:number}>>('SELECT COALESCE(SUM("unreadCount"),0)::int AS "count" FROM "Lead"'),
