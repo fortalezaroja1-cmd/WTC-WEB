@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables } from "@/lib/crm";
 import { ensureSalesTables, syncOpportunitiesFromLeads } from "@/lib/sales-system";
+import { getSession } from "@/lib/auth";
+import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +87,8 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     const body = await req.json();
     const id = String(body?.id || "");
     if (!id) return NextResponse.json({ error: "Cliente requerido" }, { status: 400 });
@@ -101,6 +105,7 @@ export async function PUT(req: NextRequest) {
       await ensureSalesTables();
       await prisma.$executeRawUnsafe('UPDATE "Opportunity" SET "phone"=$2,"updatedAt"=NOW() WHERE "phone"=$1', current.phone, data.phone);
     }
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "CUSTOMER_UPDATED", meta: { customerId: id, fields: Object.keys(data) } });
     return NextResponse.json(updated);
   } catch (error: any) {
     console.error("[CUSTOMERS_PUT]", error);
