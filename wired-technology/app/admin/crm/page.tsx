@@ -2,474 +2,154 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  CircleDollarSign,
-  Filter,
-  GripVertical,
-  MapPin,
-  MessageCircle,
-  PackageCheck,
-  Search,
-  ShoppingBag,
-  UserRound,
-  X,
-} from "lucide-react";
-import { formatCOP, timeAgo, waLink } from "@/lib/utils";
+import { CircleDollarSign, Clock3, Filter, GripVertical, Plus, Search, UserRound, X } from "lucide-react";
+import { formatCOP, timeAgo } from "@/lib/utils";
 
 const STAGES = [
-  { id: "PENDING_PAYMENT", label: "Nuevo", hint: "Sin revisar" },
-  { id: "READY", label: "Revisado", hint: "Validar y contactar" },
-  { id: "APPROVED", label: "Confirmado", hint: "Stock reservado" },
-  { id: "PREPARING", label: "Preparando", hint: "En alistamiento" },
-  { id: "SHIPPED", label: "Despachado", hint: "En transporte" },
-  { id: "DELIVERED", label: "Entregado", hint: "Venta cerrada" },
-  { id: "CANCELLED", label: "Cancelado", hint: "No concretado" },
+  { id: "NEW", label: "Nuevo", hint: "Oportunidades nuevas" },
+  { id: "CONTACTED", label: "Contactado", hint: "Primer contacto hecho" },
+  { id: "QUOTED", label: "Cotizado", hint: "Cotización enviada" },
+  { id: "NEGOTIATION", label: "Negociación", hint: "Definiendo cierre" },
+  { id: "WON", label: "Ganado", hint: "Venta concretada" },
+  { id: "LOST", label: "Perdido", hint: "No concretado" },
 ] as const;
-
-const OPEN_STAGES = new Set(["PENDING_PAYMENT", "READY", "APPROVED", "PREPARING", "SHIPPED"]);
+const OPEN = new Set(["NEW","CONTACTED","QUOTED","NEGOTIATION"]);
+const inputClass = "w-full border border-hair rounded-lg px-3 py-2.5 text-sm bg-white outline-none focus:border-copper";
 
 export default function CrmPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [sellers, setSellers] = useState<any[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [sellerFilter, setSellerFilter] = useState("ALL");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
-  const [availability, setAvailability] = useState<any[] | null>(null);
+  const [items,setItems]=useState<any[]>([]);
+  const [sellers,setSellers]=useState<any[]>([]);
+  const [selected,setSelected]=useState<string|null>(null);
+  const [query,setQuery]=useState("");
+  const [sellerFilter,setSellerFilter]=useState("ALL");
+  const [dragging,setDragging]=useState<string|null>(null);
+  const [busy,setBusy]=useState("");
+  const [error,setError]=useState("");
+  const [newOpen,setNewOpen]=useState(false);
+  const [newForm,setNewForm]=useState({customerName:"",phone:"",title:"",value:""});
 
-  const load = async () => {
-    const res = await fetch("/api/admin/orders", { cache: "no-store" });
-    if (res.ok) setOrders(await res.json());
+  const load=async()=>{
+    const r=await fetch("/api/admin/opportunities",{cache:"no-store"});
+    const d=await r.json();
+    if(r.ok)setItems(Array.isArray(d)?d:[]);
   };
+  useEffect(()=>{load();fetch("/api/admin/sales-users",{cache:"no-store"}).then(r=>r.ok?r.json():[]).then(setSellers).catch(()=>setSellers([]));},[]);
+  const current=useMemo(()=>items.find(x=>x.id===selected),[items,selected]);
 
-  useEffect(() => {
-    load();
-    fetch("/api/admin/sales-users", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setSellers)
-      .catch(() => setSellers([]));
-  }, []);
-
-  const current = useMemo(() => orders.find((o) => o.id === selected), [orders, selected]);
-
-  const filtered = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (sellerFilter === "UNASSIGNED" && o.workflow?.assignedSellerId) return false;
-      if (sellerFilter !== "ALL" && sellerFilter !== "UNASSIGNED" && o.workflow?.assignedSellerId !== sellerFilter) return false;
-      if (!text) return true;
-      const haystack = [
-        o.number,
-        o.customer?.name,
-        o.customer?.phone,
-        o.customer?.city,
-        o.workflow?.assignedSellerName,
-        o.workflow?.origin,
-      ].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(text);
+  const filtered=useMemo(()=>{
+    const q=query.trim().toLowerCase();
+    return items.filter(x=>{
+      if(sellerFilter==="UNASSIGNED"&&x.assignedSellerId)return false;
+      if(sellerFilter!=="ALL"&&sellerFilter!=="UNASSIGNED"&&x.assignedSellerId!==sellerFilter)return false;
+      if(!q)return true;
+      return [x.customerName,x.phone,x.title,x.city,x.source,x.assignedSellerName].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [orders, query, sellerFilter]);
+  },[items,query,sellerFilter]);
 
-  const openOrders = filtered.filter((o) => OPEN_STAGES.has(o.shipStatus));
-  const pipelineValue = openOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
-  const deliveredValue = filtered.filter((o) => o.shipStatus === "DELIVERED").reduce((sum, o) => sum + Number(o.total || 0), 0);
-  const newCount = filtered.filter((o) => o.shipStatus === "PENDING_PAYMENT").length;
-  const unassigned = filtered.filter((o) => OPEN_STAGES.has(o.shipStatus) && !o.workflow?.assignedSellerId).length;
-
-  const requestUpdate = async (id: string, data: any) => {
-    const res = await fetch("/api/admin/orders", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...data }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(payload.error || "No se pudo actualizar");
-      err.payload = payload;
-      throw err;
-    }
-    await load();
-    return payload;
+  const update=async(id:string,data:any)=>{
+    setBusy(id);setError("");
+    try{
+      const r=await fetch("/api/admin/opportunities",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,...data})});
+      const d=await r.json(); if(!r.ok)throw new Error(d.error||"No se pudo actualizar");
+      await load();
+    }catch(e:any){setError(e.message);}finally{setBusy("");setDragging(null);}
   };
 
-  const moveOrder = async (order: any, target: string) => {
-    if (!order || order.shipStatus === target || busy) return;
-    setBusy(order.id);
-    setError("");
-    setAvailability(null);
-    try {
-      if (target === "APPROVED") {
-        await requestUpdate(order.id, { action: "validate-stock" });
-        await requestUpdate(order.id, { action: "confirm" });
-      } else if (["PREPARING", "SHIPPED", "DELIVERED"].includes(target) && !order.workflow?.inventoryApplied) {
-        throw new Error("Primero debes validar stock y confirmar el pedido.");
-      } else {
-        await requestUpdate(order.id, { shipStatus: target });
-      }
-    } catch (e: any) {
-      setError(e.message);
-      setAvailability(e.payload?.availability || e.payload?.shortages || null);
-    } finally {
-      setBusy("");
-      setDragging(null);
-    }
+  const move=async(item:any,stage:string)=>{
+    if(!item||item.stage===stage||busy)return;
+    if(stage==="LOST"){
+      const lossReason=window.prompt("Motivo de pérdida (opcional):")||"";
+      await update(item.id,{stage,lossReason});
+    }else await update(item.id,{stage});
   };
 
-  const assignSeller = async (order: any, sellerId: string) => {
-    const seller = sellers.find((s) => s.id === sellerId);
-    setBusy(order.id);
-    setError("");
-    try {
-      await requestUpdate(order.id, {
-        assignedSellerId: seller?.id || "",
-        assignedSellerName: seller?.name || "",
-      });
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy("");
-    }
+  const create=async()=>{
+    if(!newForm.customerName.trim()&&!newForm.title.trim())return;
+    setBusy("new");setError("");
+    try{
+      const r=await fetch("/api/admin/opportunities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...newForm,value:Number(newForm.value||0),source:"MANUAL"})});
+      const d=await r.json(); if(!r.ok)throw new Error(d.error||"No se pudo crear");
+      setNewOpen(false);setNewForm({customerName:"",phone:"",title:"",value:""});await load();setSelected(d.id);
+    }catch(e:any){setError(e.message);}finally{setBusy("");}
   };
 
-  const validateStock = async (order: any) => {
-    setBusy(order.id);
-    setError("");
-    setAvailability(null);
-    try {
-      const data = await requestUpdate(order.id, { action: "validate-stock" });
-      setAvailability(data.availability || []);
-    } catch (e: any) {
-      setError(e.message);
-      setAvailability(e.payload?.availability || e.payload?.shortages || []);
-    } finally {
-      setBusy("");
-    }
-  };
+  const openItems=filtered.filter(x=>OPEN.has(x.stage));
+  const pipelineValue=openItems.reduce((s,x)=>s+Number(x.value||0),0);
+  const overdue=openItems.filter(x=>x.nextAt&&new Date(x.nextAt).getTime()<Date.now()).length;
+  const wonValue=filtered.filter(x=>x.stage==="WON").reduce((s,x)=>s+Number(x.value||0),0);
+  const unassigned=openItems.filter(x=>!x.assignedSellerId).length;
 
-  const confirmOrder = async (order: any) => {
-    setBusy(order.id);
-    setError("");
-    try {
-      await requestUpdate(order.id, { action: "confirm" });
-      setAvailability(null);
-    } catch (e: any) {
-      setError(e.message);
-      setAvailability(e.payload?.shortages || []);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const nextStage = current ? STAGES.findIndex((s) => s.id === current.shipStatus) : -1;
-  const suggestedNext = nextStage >= 0 && nextStage < STAGES.length - 1 ? STAGES[nextStage + 1] : null;
-
-  return (
-    <div className="min-w-0">
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-display text-2xl font-bold">CRM de ventas</h1>
-            <span className="font-mono text-[9px] tracking-wider uppercase bg-copper/10 text-copper px-2 py-1 rounded-full">Pipeline</span>
-          </div>
-          <p className="text-sm text-muted mt-1">Gestiona cada pedido visualmente desde que entra hasta que se entrega.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar cliente, pedido, ciudad..."
-              className="w-full sm:w-[270px] bg-white border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-copper"
-            />
-          </div>
-          <div className="relative">
-            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <select
-              value={sellerFilter}
-              onChange={(e) => setSellerFilter(e.target.value)}
-              className="w-full sm:w-[190px] bg-white border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-copper"
-            >
-              <option value="ALL">Todos los vendedores</option>
-              <option value="UNASSIGNED">Sin asignar</option>
-              {sellers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
+  return <div className="min-w-0">
+    <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-5">
+      <div>
+        <div className="flex items-center gap-2"><h1 className="font-display text-2xl font-bold">CRM de ventas</h1><span className="text-[9px] uppercase tracking-wider bg-copper/10 text-copper px-2 py-1 rounded-full">Pipeline comercial</span></div>
+        <p className="text-sm text-muted mt-1">Del primer interés al cierre. Los pedidos se gestionan aparte en Operación.</p>
       </div>
-
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-        <Metric icon={CircleDollarSign} label="Pipeline abierto" value={formatCOP(pipelineValue)} helper={`${openOrders.length} oportunidades`} />
-        <Metric icon={ShoppingBag} label="Pedidos nuevos" value={String(newCount)} helper="Pendientes por revisar" />
-        <Metric icon={UserRound} label="Sin responsable" value={String(unassigned)} helper="Requieren asignación" warning={unassigned > 0} />
-        <Metric icon={CheckCircle2} label="Entregado" value={formatCOP(deliveredValue)} helper="Ventas cerradas visibles" />
-      </div>
-
-      {error && (
-        <div className="mb-4 flex items-start gap-2 border border-red-100 bg-red-50 text-alert rounded-lg px-4 py-3 text-sm">
-          <AlertTriangle size={17} className="shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="font-semibold">No se pudo mover la oportunidad</div>
-            <div className="text-xs mt-0.5">{error}</div>
-          </div>
-          <button onClick={() => setError("")}><X size={16} /></button>
-        </div>
-      )}
-
-      <div className="overflow-x-auto pb-4 -mx-2 px-2">
-        <div className="flex gap-3 min-w-max items-start">
-          {STAGES.map((stage) => {
-            const stageOrders = filtered.filter((o) => o.shipStatus === stage.id);
-            const value = stageOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
-            return (
-              <section
-                key={stage.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  const order = orders.find((o) => o.id === dragging);
-                  if (order) moveOrder(order, stage.id);
-                }}
-                className={`w-[292px] rounded-xl border bg-[#ECEEF1] transition-colors ${dragging ? "border-copper/40" : "border-hair"}`}
-              >
-                <div className="px-3.5 py-3 border-b border-hair bg-white rounded-t-xl sticky top-0 z-[1]">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-copper shrink-0" />
-                      <div className="font-semibold text-sm truncate">{stage.label}</div>
-                      <span className="text-[10px] min-w-5 h-5 px-1.5 rounded-full bg-paper text-muted flex items-center justify-center font-mono">{stageOrders.length}</span>
-                    </div>
-                    <div className="font-mono text-[10px] font-semibold text-muted whitespace-nowrap">{formatCOP(value)}</div>
-                  </div>
-                  <div className="text-[10px] text-muted mt-1 ml-[18px]">{stage.hint}</div>
-                </div>
-
-                <div className="p-2.5 min-h-[180px] space-y-2.5">
-                  {stageOrders.length === 0 && (
-                    <div className="border border-dashed border-[#D0D5DB] rounded-lg px-3 py-8 text-center text-[11px] text-muted">
-                      Arrastra una oportunidad aquí
-                    </div>
-                  )}
-                  {stageOrders.map((order) => (
-                    <article
-                      key={order.id}
-                      draggable={!busy}
-                      onDragStart={() => setDragging(order.id)}
-                      onDragEnd={() => setDragging(null)}
-                      onClick={() => { setSelected(order.id); setError(""); setAvailability(null); }}
-                      className={`bg-white rounded-lg border p-3 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-sm ${
-                        dragging === order.id ? "opacity-40 border-copper" : "border-hair"
-                      } ${busy === order.id ? "opacity-60" : ""}`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <GripVertical size={14} className="text-[#B4BAC2] shrink-0 mt-0.5 cursor-grab" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="font-semibold text-[13px] leading-tight truncate">{order.customer?.name || "Cliente sin nombre"}</div>
-                            <div className="font-mono text-[9px] text-muted whitespace-nowrap">{order.number}</div>
-                          </div>
-                          <div className="font-display text-[15px] font-bold mt-2">{formatCOP(Number(order.total))}</div>
-                          <div className="flex items-center gap-1 text-[10px] text-muted mt-2">
-                            <MapPin size={11} /> <span className="truncate">{order.customer?.city || "Sin ciudad"}</span>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between gap-2 border-t border-hair pt-2">
-                            <div className={`text-[10px] truncate ${order.workflow?.assignedSellerName ? "text-slate-dark" : "text-alert font-semibold"}`}>
-                              {order.workflow?.assignedSellerName || "Sin asignar"}
-                            </div>
-                            <div className="text-[9px] text-muted whitespace-nowrap">{timeAgo(order.createdAt)}</div>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-2">
-                            <span className="text-[9px] bg-paper rounded-full px-2 py-1 text-muted">{order.workflow?.origin || "Web"}</span>
-                            {order.workflow?.stockValidated && !order.workflow?.inventoryApplied && (
-                              <span className="text-[9px] bg-green-50 rounded-full px-2 py-1 text-green font-semibold">Stock OK</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between border-t border-hair pt-4 mt-1 text-xs text-muted">
-        <span>Arrastra las tarjetas entre etapas. Confirmar ejecuta validación de stock antes de reservar inventario.</span>
-        <Link href="/admin/pedidos" className="text-copper font-semibold inline-flex items-center gap-1 hover:underline">Ver tabla de pedidos <ChevronRight size={13}/></Link>
-      </div>
-
-      {current && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={() => setSelected(null)}>
-          <aside className="w-[500px] max-w-[96vw] h-full bg-white shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white z-10 border-b border-hair p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-mono text-[10px] text-copper font-semibold tracking-wider">{current.number}</div>
-                  <h2 className="font-display text-xl font-bold mt-1">{current.customer?.name || "Cliente"}</h2>
-                  <div className="text-xs text-muted mt-1">{current.customer?.city || "Sin ciudad"} · {current.workflow?.origin || "Web"}</div>
-                </div>
-                <button onClick={() => setSelected(null)} className="p-2 hover:bg-paper rounded-lg"><X size={19}/></button>
-              </div>
-              <div className="mt-4 bg-paper rounded-lg p-3 flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] text-muted uppercase tracking-wider">Valor</div>
-                  <div className="font-display text-xl font-bold">{formatCOP(Number(current.total))}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] text-muted uppercase tracking-wider">Etapa</div>
-                  <div className="text-sm font-semibold">{STAGES.find((s) => s.id === current.shipStatus)?.label || current.shipStatus}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 space-y-6">
-              {error && (
-                <div className="flex gap-2 bg-red-50 border border-red-100 rounded-lg p-3 text-sm text-alert">
-                  <AlertTriangle size={17} className="shrink-0" /> {error}
-                </div>
-              )}
-
-              <section>
-                <div className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted mb-2">Contacto</div>
-                <div className="text-sm font-medium">{current.customer?.phone || "Sin teléfono"}</div>
-                <div className="text-xs text-muted mt-1">{current.customer?.address || "Sin dirección"}{current.customer?.city ? `, ${current.customer.city}` : ""}</div>
-                {current.customer?.phone && (
-                  <a
-                    href={waLink(current.customer.phone, `Hola ${current.customer?.name || ""}, te escribimos de Wired Technology sobre tu pedido ${current.number}. Estamos revisando disponibilidad y entrega. Recuerda que puedes pagar en casa al recibir.`)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-2 bg-green text-white px-3 py-2 rounded-lg text-xs font-semibold"
-                  >
-                    <MessageCircle size={14}/> WhatsApp
-                  </a>
-                )}
-              </section>
-
-              <section>
-                <label className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted block mb-2">Responsable</label>
-                <select
-                  value={current.workflow?.assignedSellerId || ""}
-                  onChange={(e) => assignSeller(current, e.target.value)}
-                  disabled={busy === current.id}
-                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper ${current.workflow?.assignedSellerId ? "border-hair" : "border-alert"}`}
-                >
-                  <option value="">Sin asignar</option>
-                  {sellers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </section>
-
-              <section>
-                <div className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted mb-2">Productos</div>
-                <div className="border border-hair rounded-lg overflow-hidden">
-                  {current.items.map((it: any) => (
-                    <div key={it.id} className="flex justify-between gap-3 px-3 py-2.5 border-b border-hair last:border-b-0 text-sm">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{it.name}</div>
-                        <div className="text-[10px] font-mono text-muted mt-0.5">{it.qty} × {formatCOP(Number(it.unitPrice))}</div>
-                      </div>
-                      <div className="font-semibold whitespace-nowrap">{formatCOP(Number(it.total))}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {availability && (
-                <section className="bg-paper rounded-lg p-3">
-                  <div className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted mb-2">Validación de stock</div>
-                  {availability.map((x: any, i: number) => (
-                    <div key={x.id || i} className={`text-xs py-1 ${x.ok ? "text-green" : "text-alert"}`}>
-                      {x.name}: solicita {x.requested}, disponible {x.available ?? "—"}
-                    </div>
-                  ))}
-                </section>
-              )}
-
-              {!current.workflow?.inventoryApplied && current.shipStatus !== "CANCELLED" && current.shipStatus !== "DELIVERED" && (
-                <section>
-                  <div className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted mb-2">Cierre operativo</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => validateStock(current)}
-                      disabled={busy === current.id}
-                      className="border border-hair rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 hover:border-copper disabled:opacity-50"
-                    >
-                      <PackageCheck size={15}/> Validar stock
-                    </button>
-                    <button
-                      onClick={() => confirmOrder(current)}
-                      disabled={busy === current.id || !current.workflow?.stockValidated}
-                      className="bg-copper text-white rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40"
-                    >
-                      <CheckCircle2 size={15}/> Confirmar
-                    </button>
-                  </div>
-                  {!current.workflow?.stockValidated && <p className="text-[10px] text-muted mt-2">Primero valida disponibilidad. Confirmar reserva el inventario.</p>}
-                </section>
-              )}
-
-              {suggestedNext && current.workflow?.inventoryApplied && !["DELIVERED", "CANCELLED"].includes(current.shipStatus) && (
-                <button
-                  onClick={() => moveOrder(current, suggestedNext.id)}
-                  disabled={busy === current.id}
-                  className="w-full bg-graphite text-white rounded-lg py-3 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  Mover a {suggestedNext.label} <ChevronRight size={16}/>
-                </button>
-              )}
-
-              {current.shipStatus === "PENDING_PAYMENT" && (
-                <button
-                  onClick={() => moveOrder(current, "READY")}
-                  disabled={busy === current.id}
-                  className="w-full bg-graphite text-white rounded-lg py-3 text-sm font-semibold flex items-center justify-center gap-2"
-                >
-                  Marcar como revisado <ChevronRight size={16}/>
-                </button>
-              )}
-
-              <section>
-                <label className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted block mb-2">Nota interna</label>
-                <textarea
-                  key={`${current.id}-${current.workflow?.internalNote || ""}`}
-                  defaultValue={current.workflow?.internalNote || ""}
-                  onBlur={(e) => requestUpdate(current.id, { internalNote: e.target.value }).catch((err) => setError(err.message))}
-                  rows={3}
-                  placeholder="Notas para el vendedor..."
-                  className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper resize-none"
-                />
-              </section>
-
-              <div className="flex gap-2 pt-2 border-t border-hair">
-                <Link href="/admin/pedidos" className="flex-1 border border-hair rounded-lg py-2.5 text-xs font-semibold text-center hover:border-copper">Abrir en pedidos</Link>
-                {current.shipStatus !== "CANCELLED" && current.shipStatus !== "DELIVERED" && (
-                  <button onClick={() => moveOrder(current, "CANCELLED")} className="px-4 border border-red-100 text-alert rounded-lg text-xs font-semibold hover:bg-red-50">Cancelar</button>
-                )}
-              </div>
-            </div>
-          </aside>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Metric({ icon: Icon, label, value, helper, warning = false }: any) {
-  return (
-    <div className="bg-white border border-hair rounded-xl p-4 flex items-start gap-3">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${warning ? "bg-red-50 text-alert" : "bg-paper text-slate-dark"}`}>
-        <Icon size={17}/>
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[.12em] font-semibold text-muted truncate">{label}</div>
-        <div className="font-display text-lg font-bold mt-0.5 truncate">{value}</div>
-        <div className="text-[10px] text-muted mt-0.5 truncate">{helper}</div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cliente, teléfono..." className="w-full sm:w-[260px] bg-white border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:border-copper"/></div>
+        <div className="relative"><Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/><select value={sellerFilter} onChange={e=>setSellerFilter(e.target.value)} className="w-full sm:w-[190px] bg-white border border-hair rounded-lg pl-9 pr-3 py-2.5 text-sm"><option value="ALL">Todos los vendedores</option><option value="UNASSIGNED">Sin asignar</option>{sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <button onClick={()=>setNewOpen(true)} className="bg-graphite text-white rounded-lg px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2"><Plus size={15}/> Nueva</button>
       </div>
     </div>
-  );
+
+    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+      <Metric icon={CircleDollarSign} label="Pipeline abierto" value={formatCOP(pipelineValue)} helper={openItems.length+" oportunidades"}/>
+      <Metric icon={Clock3} label="Seguimientos vencidos" value={String(overdue)} helper="Requieren atención" warn={overdue>0}/>
+      <Metric icon={UserRound} label="Sin responsable" value={String(unassigned)} helper="Por asignar" warn={unassigned>0}/>
+      <Metric icon={CircleDollarSign} label="Ganado" value={formatCOP(wonValue)} helper="Valor registrado"/>
+    </div>
+
+    {error&&<div className="mb-4 border border-red-100 bg-red-50 text-alert rounded-lg px-4 py-3 text-sm">{error}</div>}
+
+    <div className="overflow-x-auto pb-4 -mx-2 px-2"><div className="flex gap-3 min-w-max items-start">
+      {STAGES.map(stage=>{
+        const rows=filtered.filter(x=>x.stage===stage.id);
+        const value=rows.reduce((s,x)=>s+Number(x.value||0),0);
+        return <section key={stage.id} onDragOver={e=>e.preventDefault()} onDrop={()=>move(items.find(x=>x.id===dragging),stage.id)} className="w-[292px] rounded-xl border border-hair bg-[#ECEEF1]">
+          <div className="px-3.5 py-3 border-b border-hair bg-white rounded-t-xl sticky top-0 z-[1]">
+            <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-copper"/><b className="text-sm">{stage.label}</b><span className="text-[10px] bg-paper rounded-full px-2 py-0.5">{rows.length}</span></div><span className="font-mono text-[10px] text-muted">{formatCOP(value)}</span></div>
+            <div className="text-[10px] text-muted mt-1 ml-[18px]">{stage.hint}</div>
+          </div>
+          <div className="p-2.5 min-h-[170px] space-y-2.5">
+            {!rows.length&&<div className="border border-dashed border-[#D0D5DB] rounded-lg px-3 py-8 text-center text-[11px] text-muted">Arrastra una oportunidad aquí</div>}
+            {rows.map(x=><article key={x.id} draggable={!busy} onDragStart={()=>setDragging(x.id)} onDragEnd={()=>setDragging(null)} onClick={()=>setSelected(x.id)} className={"bg-white rounded-lg border border-hair p-3 cursor-pointer hover:shadow-sm "+(busy===x.id?"opacity-60":"")}>
+              <div className="flex gap-2"><GripVertical size={14} className="text-[#B4BAC2] mt-0.5"/><div className="min-w-0 flex-1">
+                <div className="font-semibold text-[13px] truncate">{x.customerName||x.title}</div>
+                <div className="text-[10px] text-muted truncate mt-0.5">{x.title}</div>
+                <div className="font-display text-[15px] font-bold mt-2">{formatCOP(Number(x.value||0))}</div>
+                <div className="flex items-center justify-between gap-2 border-t border-hair pt-2 mt-2"><span className={"text-[10px] truncate "+(x.assignedSellerName?"":"text-alert font-semibold")}>{x.assignedSellerName||"Sin asignar"}</span><span className="text-[9px] text-muted">{timeAgo(x.updatedAt)}</span></div>
+                {x.nextAt&&<div className={"text-[9px] mt-2 rounded-full px-2 py-1 inline-block "+(new Date(x.nextAt).getTime()<Date.now()?"bg-red-50 text-alert":"bg-paper text-muted")}>{new Date(x.nextAt).toLocaleString("es-CO")}</div>}
+                <div className="mt-2 text-[9px] text-muted">{x.source||"Manual"}{x.quoteCount?" · "+x.quoteCount+" cot.":""}</div>
+              </div></div>
+            </article>)}
+          </div>
+        </section>
+      })}
+    </div></div>
+
+    <div className="border-t border-hair pt-4 text-xs text-muted flex justify-between gap-3"><span>Pipeline comercial separado del flujo logístico de pedidos.</span><Link href="/admin/cotizaciones" className="text-copper font-semibold">Ver cotizaciones →</Link></div>
+
+    {current&&<div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={()=>setSelected(null)}><aside className="w-[500px] max-w-[96vw] h-full bg-white shadow-xl overflow-y-auto" onClick={e=>e.stopPropagation()}>
+      <div className="sticky top-0 bg-white z-10 border-b border-hair p-5 flex items-start justify-between gap-3"><div><div className="text-[10px] uppercase tracking-wider text-copper font-semibold">{current.stage}</div><h2 className="font-display text-xl font-bold mt-1">{current.customerName||current.title}</h2><div className="text-xs text-muted mt-1">{current.phone||"Sin teléfono"} · {current.source||"Manual"}</div></div><button onClick={()=>setSelected(null)} className="p-2"><X size={19}/></button></div>
+      <div className="p-5 space-y-5">
+        <section className="grid grid-cols-2 gap-3">
+          <Field label="Valor"><input type="number" defaultValue={Number(current.value||0)} onBlur={e=>update(current.id,{value:Number(e.target.value||0)})} className={inputClass}/></Field>
+          <Field label="Prioridad"><select value={current.priority||"MEDIUM"} onChange={e=>update(current.id,{priority:e.target.value})} className={inputClass}><option value="LOW">Baja</option><option value="MEDIUM">Media</option><option value="HIGH">Alta</option></select></Field>
+        </section>
+        <Field label="Responsable"><select value={current.assignedSellerId||""} onChange={e=>{const s=sellers.find(x=>x.id===e.target.value);update(current.id,{assignedSellerId:s?.id||"",assignedSellerName:s?.name||""})}} className={inputClass}><option value="">Sin asignar</option>{sellers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Próxima acción"><input defaultValue={current.nextAction||""} onBlur={e=>update(current.id,{nextAction:e.target.value})} placeholder="Ej. llamar y confirmar" className={inputClass}/></Field>
+          <Field label="Fecha de seguimiento"><input type="datetime-local" defaultValue={current.nextAt?new Date(new Date(current.nextAt).getTime()-new Date(current.nextAt).getTimezoneOffset()*60000).toISOString().slice(0,16):""} onBlur={e=>update(current.id,{nextAt:e.target.value||null})} className={inputClass}/></Field>
+        </section>
+        <Field label="Notas"><textarea defaultValue={current.notes||""} onBlur={e=>update(current.id,{notes:e.target.value})} rows={4} className={inputClass+" resize-none"} placeholder="Contexto comercial, objeciones, acuerdos..."/></Field>
+        <section className="rounded-xl border border-hair p-4"><div className="flex items-center justify-between gap-3"><div><div className="font-semibold text-sm">Cotizaciones</div><div className="text-xs text-muted mt-1">{current.quoteCount||0} registrada(s){current.latestQuoteNumber?" · última "+current.latestQuoteNumber:""}</div></div><Link href={"/admin/cotizaciones?opportunityId="+current.id} className="bg-copper text-white rounded-lg px-3 py-2 text-xs font-semibold">Crear / ver</Link></div></section>
+        <section><div className="text-[10px] uppercase tracking-[.14em] font-semibold text-muted mb-2">Actividad</div><div className="space-y-2">{(current.activities||[]).map((a:any)=><div key={a.id} className="border-l-2 border-hair pl-3 text-xs"><div>{a.text}</div><div className="text-[9px] text-muted mt-0.5">{a.actorName||"Sistema"} · {new Date(a.createdAt).toLocaleString("es-CO")}</div></div>)}{!(current.activities||[]).length&&<div className="text-xs text-muted">Sin actividad registrada todavía.</div>}</div></section>
+      </div>
+    </aside></div>}
+
+    {newOpen&&<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={()=>setNewOpen(false)}><div className="bg-white rounded-2xl border border-hair w-full max-w-[520px] p-5" onClick={e=>e.stopPropagation()}><div className="flex justify-between items-center mb-4"><h2 className="font-display text-lg font-bold">Nueva oportunidad</h2><button onClick={()=>setNewOpen(false)}><X size={18}/></button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Cliente"><input value={newForm.customerName} onChange={e=>setNewForm({...newForm,customerName:e.target.value})} className={inputClass}/></Field><Field label="Teléfono"><input value={newForm.phone} onChange={e=>setNewForm({...newForm,phone:e.target.value})} className={inputClass}/></Field><div className="sm:col-span-2"><Field label="Oportunidad"><input value={newForm.title} onChange={e=>setNewForm({...newForm,title:e.target.value})} placeholder="Ej. Compra cableado obra norte" className={inputClass}/></Field></div><Field label="Valor estimado"><input type="number" value={newForm.value} onChange={e=>setNewForm({...newForm,value:e.target.value})} className={inputClass}/></Field></div><button onClick={create} disabled={busy==="new"} className="mt-5 w-full bg-copper text-white rounded-lg py-2.5 text-sm font-semibold">{busy==="new"?"Creando...":"Crear oportunidad"}</button></div></div>}
+  </div>;
 }
+
+function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="block"><span className="text-[11px] font-semibold block mb-1.5">{label}</span>{children}</label>}
+function Metric({icon:Icon,label,value,helper,warn=false}:{icon:any;label:string;value:string;helper:string;warn?:boolean}){return <div className="bg-white border border-hair rounded-xl p-4"><div className="flex justify-between gap-2"><span className="text-[10px] uppercase tracking-wider text-muted">{label}</span><Icon size={16} className={warn?"text-alert":"text-copper"}/></div><div className={"font-display text-xl font-bold mt-2 "+(warn?"text-alert":"")}>{value}</div><div className="text-[10px] text-muted mt-1">{helper}</div></div>}
