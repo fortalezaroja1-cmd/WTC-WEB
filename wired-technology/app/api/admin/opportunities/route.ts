@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
     const customerName = String(body?.customerName || "").trim();
     if (!title && !customerName) return NextResponse.json({ error: "Indica cliente o nombre de la oportunidad" }, { status: 400 });
     const stage = OPPORTUNITY_STAGES.includes(String(body?.stage || "NEW") as any) ? String(body?.stage || "NEW") : "NEW";
+    const matchedCustomer = body?.customerId ? await prisma.customer.findUnique({ where: { id: String(body.customerId) } }) : body?.phone ? await prisma.customer.findFirst({ where: { phone: String(body.phone) }, orderBy: { updatedAt: "desc" } }) : null;
     const id = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO "Opportunity" (
@@ -96,11 +97,11 @@ export async function POST(req: NextRequest) {
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())`,
       id,
       body?.leadId || null,
-      body?.customerId || null,
-      customerName || null,
-      body?.phone || null,
-      body?.email || null,
-      body?.city || null,
+      matchedCustomer?.id || body?.customerId || null,
+      customerName || matchedCustomer?.name || null,
+      body?.phone || matchedCustomer?.phone || null,
+      body?.email || matchedCustomer?.email || null,
+      body?.city || matchedCustomer?.city || null,
       title || `Venta · ${customerName || body?.phone || "Cliente"}`,
       Number(body?.value || 0),
       stage,
