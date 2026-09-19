@@ -24,6 +24,7 @@ const NAV = [
   { href: "/admin/analitica", label: "Analítica", icon: LayoutDashboard, permission: "analytics.view" },
   { href: "/admin/integraciones", label: "Integraciones", icon: Settings, permission: "integrations.view" },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings, permission: "settings.view" },
+  { href: "/admin/sistema", label: "Estado del sistema", icon: ShieldCheck, permission: "settings.view" },
   { href: "/admin/auditoria", label: "Auditoría", icon: ShieldCheck, permission: "settings.view" },
   { href: "/admin/usuarios", label: "Usuarios y permisos", icon: ShieldCheck, permission: "users.manage" },
 ];
