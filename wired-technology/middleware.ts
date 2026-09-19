@@ -116,6 +116,7 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/devoluciones")) return "returns.view";
   if (pathname.startsWith("/admin/analitica")) return "analytics.view";
   if (pathname.startsWith("/admin/integraciones")) return "integrations.view";
+  if (pathname.startsWith("/admin/sistema")) return "settings.view";
   if (pathname.startsWith("/admin/auditoria")) return "settings.view";
   if (pathname.startsWith("/admin/configuracion")) return "settings.view";
   if (pathname === "/admin") return "dashboard.view";
@@ -136,6 +137,7 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/api/admin/orders")) return method === "GET" ? "orders.view" : "orders.manage";
   if (pathname.startsWith("/api/admin/settings")) return method === "GET" ? "settings.view" : "settings.manage";
   if (pathname.startsWith("/api/admin/skydropx")) return "orders.manage";
+  if (pathname.startsWith("/api/admin/system/health")) return "settings.view";
   if (pathname.startsWith("/api/admin/system")) return "integrations.view";
   if (pathname.startsWith("/api/admin/stats")) return "dashboard.view";
   if (pathname.startsWith("/api/admin/sales-users")) return "crm.view";
