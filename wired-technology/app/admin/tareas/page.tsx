@@ -8,20 +8,24 @@ const DEFAULT_AUTOMATIONS = { newOrderTask: true, followup24h: true, postSale48h
 export default function TareasPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [opportunities, setOpportunities] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [automations, setAutomations] = useState(DEFAULT_AUTOMATIONS);
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
   const [owner, setOwner] = useState("");
+  const [opportunityId, setOpportunityId] = useState("");
 
   const load = async () => {
-    const [o, l, s] = await Promise.all([
+    const [o, l, opp, s] = await Promise.all([
       fetch("/api/admin/orders", { cache: "no-store" }).then(r => r.json()),
       fetch("/api/admin/crm/leads", { cache: "no-store" }).then(r => r.json()).catch(() => []),
+      fetch("/api/admin/opportunities", { cache: "no-store" }).then(r => r.json()).catch(() => []),
       fetch("/api/admin/settings", { cache: "no-store" }).then(r => r.json()),
     ]);
     setOrders(Array.isArray(o) ? o : []);
     setLeads(Array.isArray(l) ? l : []);
+    setOpportunities(Array.isArray(opp) ? opp : []);
     try { setTasks(JSON.parse(s.crmTasks || "[]")); } catch { setTasks([]); }
     try { setAutomations({ ...DEFAULT_AUTOMATIONS, ...JSON.parse(s.crmAutomations || "{}") }); } catch {}
   };
@@ -34,8 +38,9 @@ export default function TareasPage() {
 
   const add = async () => {
     if (!title.trim()) return;
-    await save([{ id: crypto.randomUUID(), title: title.trim(), due: due || null, owner: owner || null, status: "OPEN", createdAt: new Date().toISOString() }, ...tasks]);
-    setTitle(""); setDue(""); setOwner("");
+    const linked = opportunities.find((x:any)=>x.id===opportunityId);
+    await save([{ id: crypto.randomUUID(), title: title.trim(), due: due || null, owner: owner || null, opportunityId: opportunityId || null, opportunityTitle: linked?.customerName || linked?.title || null, status: "OPEN", createdAt: new Date().toISOString() }, ...tasks]);
+    setTitle(""); setDue(""); setOwner(""); setOpportunityId("");
   };
 
   const systemTasks = useMemo(() => {
@@ -79,6 +84,27 @@ export default function TareasPage() {
       }
     }
 
+    for (const opp of opportunities) {
+      if (["WON","LOST"].includes(opp.stage)) continue;
+      const dueAt = opp.nextAt ? new Date(opp.nextAt).getTime() : null;
+      if (dueAt && dueAt <= now) out.push({
+        id: `opp-due-${opp.id}`,
+        title: `Seguimiento vencido · ${opp.customerName || opp.title}`,
+        detail: `${opp.assignedSellerName || "Sin responsable"} · ${opp.nextAction || "Sin próxima acción"}`,
+        href: "/admin/crm",
+        kind: "Oportunidad",
+        priority: opp.priority === "HIGH" ? 0 : 2,
+      });
+      else if (opp.priority === "HIGH" && !opp.nextAction) out.push({
+        id: `opp-high-${opp.id}`,
+        title: `Definir siguiente paso · ${opp.customerName || opp.title}`,
+        detail: `${opp.assignedSellerName || "Sin responsable"} · prioridad alta`,
+        href: "/admin/crm",
+        kind: "Oportunidad",
+        priority: 1,
+      });
+    }
+
     for (const o of orders) {
       const ageH = (now - new Date(o.updatedAt || o.createdAt).getTime()) / 36e5;
       if (automations.newOrderTask && o.shipStatus === "PENDING_PAYMENT") out.push({ id: `new-${o.id}`, title: `Revisar pedido ${o.number}`, detail: o.customer?.name, href: "/admin/pedidos", kind: "Pedido nuevo", priority: 3 });
@@ -87,7 +113,7 @@ export default function TareasPage() {
       if (automations.postSale48h && o.shipStatus === "DELIVERED" && ageH >= 24 && ageH <= 96) out.push({ id: `post-${o.id}`, title: `Postventa 24–72h · ${o.number}`, detail: o.customer?.name, href: "/admin/pedidos", kind: "Postventa", priority: 6 });
     }
     return out.sort((a, b) => Number(a.priority || 0) - Number(b.priority || 0));
-  }, [orders, leads, automations]);
+  }, [orders, leads, opportunities, automations]);
 
   const open = tasks.filter(t => t.status !== "DONE");
   const done = tasks.filter(t => t.status === "DONE");
@@ -99,9 +125,10 @@ export default function TareasPage() {
       <div className="flex gap-2"><div className="text-xs bg-white border border-hair rounded-lg px-3 py-2"><b>{systemTasks.length + open.length}</b> pendientes</div>{callCount > 0 && <div className="text-xs bg-copper/10 text-copper border border-copper/20 rounded-lg px-3 py-2 flex items-center gap-1.5"><Phone size={13}/><b>{callCount}</b> llamadas</div>}</div>
     </div>
 
-    <div className="bg-white border border-hair rounded-xl p-4 mb-5 grid grid-cols-1 md:grid-cols-[1fr_180px_180px_auto] gap-2">
+    <div className="bg-white border border-hair rounded-xl p-4 mb-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1fr_180px_220px_180px_auto] gap-2">
       <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nueva tarea..." className="border border-hair rounded-lg px-3 py-2.5 text-sm" />
       <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Responsable" className="border border-hair rounded-lg px-3 py-2.5 text-sm" />
+      <select value={opportunityId} onChange={e=>setOpportunityId(e.target.value)} className="border border-hair rounded-lg px-3 py-2.5 text-sm"><option value="">Sin oportunidad vinculada</option>{opportunities.filter((x:any)=>!["WON","LOST"].includes(x.stage)).map((x:any)=><option key={x.id} value={x.id}>{x.customerName||x.title}</option>)}</select>
       <input type="datetime-local" value={due} onChange={e=>setDue(e.target.value)} className="border border-hair rounded-lg px-3 py-2.5 text-sm" />
       <button onClick={add} className="bg-copper text-white rounded-lg px-4 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2"><Plus size={15}/> Crear</button>
     </div>
@@ -124,7 +151,7 @@ export default function TareasPage() {
           {open.length === 0 && <div className="p-6 text-sm text-muted">No hay tareas manuales pendientes.</div>}
           {open.map(t => <div key={t.id} className="p-4 flex items-start gap-3">
             <button onClick={()=>save(tasks.map(x=>x.id===t.id?{...x,status:"DONE"}:x))} className="mt-0.5 w-6 h-6 rounded-full border border-hair flex items-center justify-center hover:border-copper"><Check size={13}/></button>
-            <div className="flex-1"><div className="text-sm font-semibold">{t.title}</div><div className="text-xs text-muted mt-1">{t.owner || "Sin responsable"}{t.due ? ` · ${new Date(t.due).toLocaleString("es-CO")}` : ""}</div></div>
+            <div className="flex-1"><div className="text-sm font-semibold">{t.title}</div><div className="text-xs text-muted mt-1">{t.owner || "Sin responsable"}{t.opportunityTitle ? ` · ${t.opportunityTitle}` : ""}{t.due ? ` · ${new Date(t.due).toLocaleString("es-CO")}` : ""}</div></div>
             <button onClick={()=>save(tasks.filter(x=>x.id!==t.id))} className="text-muted hover:text-alert"><Trash2 size={15}/></button>
           </div>)}
         </div>
