@@ -103,6 +103,7 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/usuarios")) return "users.manage";
   if (pathname.startsWith("/admin/inbox")) return "inbox.view";
   if (pathname.startsWith("/admin/crm")) return "crm.view";
+  if (pathname.startsWith("/admin/cotizaciones")) return "crm.view";
   if (pathname.startsWith("/admin/agente")) return "agent.use";
   if (pathname.startsWith("/admin/tareas")) return "tasks.view";
   if (pathname.startsWith("/admin/automatizaciones")) return "automations.view";
@@ -120,6 +121,9 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/api/admin/invitations")) return "users.manage";
   if (pathname.startsWith("/api/admin/analytics")) return method === "GET" ? "analytics.view" : "analytics.export";
   if (pathname.startsWith("/api/admin/agent")) return "agent.use";
+  if (pathname.startsWith("/api/admin/opportunities")) return method === "GET" ? "crm.view" : "crm.manage";
+  if (pathname.startsWith("/api/admin/quotes")) return method === "GET" ? "crm.view" : "crm.manage";
+  if (pathname.startsWith("/api/admin/customers")) return method === "GET" ? "customers.view" : "customers.manage";
   if (pathname.startsWith("/api/admin/crm/messages")) return method === "POST" ? "inbox.reply" : "inbox.view";
   if (pathname.startsWith("/api/admin/crm/leads")) return method === "GET" ? "inbox.view" : "crm.manage";
   if (pathname.startsWith("/api/admin/products")) return method === "GET" ? "products.view" : "products.manage";
