@@ -16,7 +16,7 @@ export default function ClientesAdmin(){
     const r=await fetch("/api/admin/customers",{cache:"no-store"});
     const d=await r.json(); if(r.ok)setCustomers(Array.isArray(d)?d:[]);
   };
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load().then(()=>{const id=new URLSearchParams(window.location.search).get("customerId");if(id)open(id);})},[]);
 
   const open=async(id:string)=>{
     setError("");setBusy(true);
