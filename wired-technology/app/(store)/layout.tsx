@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { CartProvider } from "@/components/store/CartProvider";
 import { StoreHeader } from "@/components/store/Header";
 import { MessageCircle } from "lucide-react";
+import WiredAssistant from "@/components/WiredAssistant";
 
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const categories = await prisma.category.findMany({
@@ -53,11 +54,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
           </div>
         </footer>
 
-        {/* WhatsApp flotante */}
-        <a href={waUrl} target="_blank" rel="noreferrer"
-          className="fixed bottom-6 right-6 bg-green text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-30 hover:scale-105 transition-transform">
-          <MessageCircle size={26} />
-        </a>
+        <WiredAssistant audience="customer" />
       </div>
     </CartProvider>
   );
