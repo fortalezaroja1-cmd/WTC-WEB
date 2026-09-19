@@ -20,6 +20,7 @@ export default function CrmPage() {
   const [items,setItems]=useState<any[]>([]);
   const [sellers,setSellers]=useState<any[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
+  const [detail,setDetail]=useState<any|null>(null);
   const [query,setQuery]=useState("");
   const [sellerFilter,setSellerFilter]=useState("ALL");
   const [dragging,setDragging]=useState<string|null>(null);
@@ -34,7 +35,12 @@ export default function CrmPage() {
     if(r.ok)setItems(Array.isArray(d)?d:[]);
   };
   useEffect(()=>{load();fetch("/api/admin/sales-users",{cache:"no-store"}).then(r=>r.ok?r.json():[]).then(setSellers).catch(()=>setSellers([]));},[]);
-  const current=useMemo(()=>items.find(x=>x.id===selected),[items,selected]);
+  const current=useMemo(()=>detail||items.find(x=>x.id===selected),[items,selected,detail]);
+
+  const openDetail=async(id:string)=>{
+    setSelected(id);setDetail(null);
+    try{const r=await fetch("/api/admin/opportunities?id="+encodeURIComponent(id),{cache:"no-store"});const d=await r.json();if(r.ok)setDetail(d);}catch{}
+  };
 
   const filtered=useMemo(()=>{
     const q=query.trim().toLowerCase();
@@ -52,6 +58,7 @@ export default function CrmPage() {
       const r=await fetch("/api/admin/opportunities",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,...data})});
       const d=await r.json(); if(!r.ok)throw new Error(d.error||"No se pudo actualizar");
       await load();
+      if(selected===id)await openDetail(id);
     }catch(e:any){setError(e.message);}finally{setBusy("");setDragging(null);}
   };
 
@@ -69,7 +76,7 @@ export default function CrmPage() {
     try{
       const r=await fetch("/api/admin/opportunities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...newForm,value:Number(newForm.value||0),source:"MANUAL"})});
       const d=await r.json(); if(!r.ok)throw new Error(d.error||"No se pudo crear");
-      setNewOpen(false);setNewForm({customerName:"",phone:"",title:"",value:""});await load();setSelected(d.id);
+      setNewOpen(false);setNewForm({customerName:"",phone:"",title:"",value:""});await load();openDetail(d.id);
     }catch(e:any){setError(e.message);}finally{setBusy("");}
   };
 
@@ -112,7 +119,7 @@ export default function CrmPage() {
           </div>
           <div className="p-2.5 min-h-[170px] space-y-2.5">
             {!rows.length&&<div className="border border-dashed border-[#D0D5DB] rounded-lg px-3 py-8 text-center text-[11px] text-muted">Arrastra una oportunidad aquí</div>}
-            {rows.map(x=><article key={x.id} draggable={!busy} onDragStart={()=>setDragging(x.id)} onDragEnd={()=>setDragging(null)} onClick={()=>setSelected(x.id)} className={"bg-white rounded-lg border border-hair p-3 cursor-pointer hover:shadow-sm "+(busy===x.id?"opacity-60":"")}>
+            {rows.map(x=><article key={x.id} draggable={!busy} onDragStart={()=>setDragging(x.id)} onDragEnd={()=>setDragging(null)} onClick={()=>openDetail(x.id)} className={"bg-white rounded-lg border border-hair p-3 cursor-pointer hover:shadow-sm "+(busy===x.id?"opacity-60":"")}>
               <div className="flex gap-2"><GripVertical size={14} className="text-[#B4BAC2] mt-0.5"/><div className="min-w-0 flex-1">
                 <div className="font-semibold text-[13px] truncate">{x.customerName||x.title}</div>
                 <div className="text-[10px] text-muted truncate mt-0.5">{x.title}</div>
@@ -129,8 +136,8 @@ export default function CrmPage() {
 
     <div className="border-t border-hair pt-4 text-xs text-muted flex justify-between gap-3"><span>Pipeline comercial separado del flujo logístico de pedidos.</span><Link href="/admin/cotizaciones" className="text-copper font-semibold">Ver cotizaciones →</Link></div>
 
-    {current&&<div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={()=>setSelected(null)}><aside className="w-[500px] max-w-[96vw] h-full bg-white shadow-xl overflow-y-auto" onClick={e=>e.stopPropagation()}>
-      <div className="sticky top-0 bg-white z-10 border-b border-hair p-5 flex items-start justify-between gap-3"><div><div className="text-[10px] uppercase tracking-wider text-copper font-semibold">{current.stage}</div><h2 className="font-display text-xl font-bold mt-1">{current.customerName||current.title}</h2><div className="text-xs text-muted mt-1">{current.phone||"Sin teléfono"} · {current.source||"Manual"}</div></div><button onClick={()=>setSelected(null)} className="p-2"><X size={19}/></button></div>
+    {current&&<div className="fixed inset-0 bg-black/40 z-50 flex justify-end" onClick={()=>{setSelected(null);setDetail(null)}}><aside className="w-[500px] max-w-[96vw] h-full bg-white shadow-xl overflow-y-auto" onClick={e=>e.stopPropagation()}>
+      <div className="sticky top-0 bg-white z-10 border-b border-hair p-5 flex items-start justify-between gap-3"><div><div className="text-[10px] uppercase tracking-wider text-copper font-semibold">{current.stage}</div><h2 className="font-display text-xl font-bold mt-1">{current.customerName||current.title}</h2><div className="text-xs text-muted mt-1">{current.phone||"Sin teléfono"} · {current.source||"Manual"}</div></div><button onClick={()=>{setSelected(null);setDetail(null)}} className="p-2"><X size={19}/></button></div>
       <div className="p-5 space-y-5">
         <section className="grid grid-cols-2 gap-3">
           <Field label="Valor"><input type="number" defaultValue={Number(current.value||0)} onBlur={e=>update(current.id,{value:Number(e.target.value||0)})} className={inputClass}/></Field>
