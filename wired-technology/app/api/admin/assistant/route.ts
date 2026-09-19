@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ensureCrmTables } from "@/lib/crm";
+import { ensureSalesTables, syncOpportunitiesFromLeads } from "@/lib/sales-system";
 import type { Permission } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,26 @@ export async function POST(req:NextRequest){
   const q=norm(text); const sources:string[]=[];
   const settings=await prisma.siteSetting.findMany({where:{key:{in:["agentTeamMission","agentTeamRules","agentTeamPriorities","agentTeamEscalation"]}}});
   const knowledge=Object.fromEntries(settings.map(s=>[s.key,s.value]));
+
+  const phoneMatch=text.replace(/\D/g,"").match(/\d{7,}/)?.[0];
+  if(phoneMatch&&allowed(session,"customers.view")){
+   const customer=await prisma.customer.findFirst({where:{phone:{contains:phoneMatch}},include:{orders:{orderBy:{createdAt:"desc"},take:5}}});
+   if(customer){
+    await ensureSalesTables(); await syncOpportunitiesFromLeads();
+    const opps=await prisma.$queryRawUnsafe<any[]>('SELECT * FROM "Opportunity" WHERE "phone"=$1 ORDER BY "updatedAt" DESC LIMIT 20',customer.phone);
+    sources.push("Clientes","CRM");
+    return NextResponse.json({reply:`${customer.name}: ${customer.city||"sin ciudad"}, ${customer.orders.length} pedidos recientes visibles y ${opps.length} oportunidades comerciales. Último pedido: ${customer.orders[0]?`${customer.orders[0].number} · ${customer.orders[0].shipStatus} · ${money(Number(customer.orders[0].total))}`:"sin pedidos registrados"}.`,sources});
+   }
+  }
+
+  if(/(cotiz|presupuesto|propuesta)/.test(q)){
+   if(!allowed(session,"crm.view"))return NextResponse.json(deny());
+   await ensureSalesTables(); await syncOpportunitiesFromLeads();
+   const quotes=await prisma.$queryRawUnsafe<any[]>('SELECT * FROM "Quote" ORDER BY "createdAt" DESC LIMIT 200');
+   const open=quotes.filter(x=>["DRAFT","SENT"].includes(x.status)); const expired=quotes.filter(x=>x.status==="EXPIRED");
+   sources.push("Cotizaciones");
+   return NextResponse.json({reply:`Hay ${open.length} cotizaciones abiertas y ${expired.length} vencidas entre las últimas ${quotes.length}. Las abiertas más recientes: ${open.slice(0,6).map(x=>`${x.number} · ${x.customerName||"Cliente"} · ${x.status} · ${money(Number(x.total))}`).join("; ")||"ninguna"}.`,sources});
+  }
 
   if(/(stock|inventario|agotad|existencia|producto)/.test(q)){
    if(!allowed(session,"inventory.view")&&!allowed(session,"products.view"))return NextResponse.json(deny());
@@ -44,10 +65,15 @@ export async function POST(req:NextRequest){
 
   if(/(lead|cliente|crm|seguimiento|pendiente|oportunidad)/.test(q)){
    if(!allowed(session,"crm.view")&&!allowed(session,"customers.view"))return NextResponse.json(deny());
-   await ensureCrmTables();
-   const leads=await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Lead" ORDER BY "updatedAt" DESC LIMIT 200`);
-   const open=leads.filter(x=>!["CLOSED","LOST"].includes(x.status)); const mine=open.filter(x=>x.assignedSellerId===session.userId); const overdue=open.filter(x=>x.capNextAt&&new Date(x.capNextAt).getTime()<=Date.now());
-   sources.push("CRM"); return NextResponse.json({reply:`CRM: ${open.length} leads abiertos. ${mine.length} están asignados a ti y ${overdue.length} tienen seguimiento vencido. Prioridad: ${(mine.length?mine:overdue.length?overdue:open).slice(0,6).map(x=>`${x.name||x.phone||"Lead"} · ${x.status}${x.capNextStep?` · ${x.capNextStep}`:""}`).join("; ")||"sin pendientes"}.`,sources});
+   await ensureSalesTables(); await syncOpportunitiesFromLeads();
+   const opportunities=await prisma.$queryRawUnsafe<any[]>('SELECT * FROM "Opportunity" ORDER BY "updatedAt" DESC LIMIT 500');
+   const open=opportunities.filter(x=>["NEW","CONTACTED","QUOTED","NEGOTIATION"].includes(x.stage));
+   const mine=open.filter(x=>x.assignedSellerId===session.userId);
+   const overdue=open.filter(x=>x.nextAt&&new Date(x.nextAt).getTime()<=Date.now());
+   const unassigned=open.filter(x=>!x.assignedSellerId);
+   sources.push("CRM");
+   const focus=overdue.length?overdue:mine.length?mine:unassigned.length?unassigned:open;
+   return NextResponse.json({reply:`CRM: ${open.length} oportunidades abiertas; ${mine.length} asignadas a ti, ${overdue.length} con seguimiento vencido y ${unassigned.length} sin responsable. Prioridad visible: ${focus.slice(0,6).map(x=>`${x.customerName||x.title} · ${x.stage}${x.nextAction?` · ${x.nextAction}`:""}`).join("; ")||"sin pendientes"}.`,sources});
   }
 
   if(/(regla|politica|como debo|como trabajo|prioridad del equipo|cuando escalo|escalar)/.test(q)){
@@ -57,12 +83,12 @@ export async function POST(req:NextRequest){
 
   if(/(tarea|que hago|que debo|prioridad|hoy)/.test(q)){
    const parts:string[]=[];
-   if(allowed(session,"crm.view")){await ensureCrmTables();const leads=await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Lead" WHERE "status" NOT IN ('CLOSED','LOST') ORDER BY "updatedAt" DESC LIMIT 200`);const mine=leads.filter(x=>x.assignedSellerId===session.userId);parts.push(`${mine.length} leads abiertos asignados a ti`);sources.push("CRM");}
+   if(allowed(session,"crm.view")){await ensureSalesTables();await syncOpportunitiesFromLeads();const opps=await prisma.$queryRawUnsafe<any[]>('SELECT * FROM "Opportunity" WHERE "stage" IN (\'NEW\',\'CONTACTED\',\'QUOTED\',\'NEGOTIATION\') ORDER BY "updatedAt" DESC LIMIT 500');const mine=opps.filter(x=>x.assignedSellerId===session.userId);const overdue=opps.filter(x=>x.nextAt&&new Date(x.nextAt).getTime()<=Date.now());parts.push(`${mine.length} oportunidades asignadas a ti y ${overdue.length} seguimientos vencidos`);sources.push("CRM");}
    if(allowed(session,"orders.view")){const n=await prisma.order.count({where:{shipStatus:{in:["PENDING_PAYMENT","READY","APPROVED","PREPARING","SHIPPED"]}}});parts.push(`${n} pedidos abiertos`);sources.push("Pedidos");}
    if(allowed(session,"inventory.view")){const n=await prisma.product.count({where:{stock:{lte:5}}});parts.push(`${n} productos base con stock ≤ 5`);sources.push("Inventario");}
    return NextResponse.json({reply:parts.length?`Tu panorama ahora: ${parts.join(", ")}. ${knowledge.agentTeamPriorities?`Según la guía del equipo, prioriza: ${knowledge.agentTeamPriorities}`:"Prioriza seguimientos vencidos, clientes activos, pedidos abiertos e inventario crítico."}`:"No tienes módulos operativos habilitados para construir un resumen.",sources});
   }
 
-  return NextResponse.json({reply:"Puedo consultar datos reales de Wired sobre CRM y seguimientos, pedidos, ventas e inventario. Por ejemplo: “¿qué debo atender hoy?”, “¿qué pedidos están abiertos?”, “¿cómo van las ventas?” o “¿qué tiene stock bajo?”.",sources});
+  return NextResponse.json({reply:"Puedo consultar datos reales de Wired sobre CRM, oportunidades, cotizaciones, clientes, pedidos, ventas e inventario. Por ejemplo: “¿qué debo atender hoy?”, “¿qué pedidos están abiertos?”, “¿cómo van las ventas?” o “¿qué tiene stock bajo?”.",sources});
  }catch(e:any){console.error("[ADMIN_ASSISTANT]",e);return NextResponse.json({error:e?.message||"No se pudo consultar Wired"},{status:500});}
 }
