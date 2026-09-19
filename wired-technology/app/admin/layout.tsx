@@ -23,6 +23,7 @@ const NAV = [
   { href: "/admin/analitica", label: "Analítica", icon: LayoutDashboard, permission: "analytics.view" },
   { href: "/admin/integraciones", label: "Integraciones", icon: Settings, permission: "integrations.view" },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings, permission: "settings.view" },
+  { href: "/admin/auditoria", label: "Auditoría", icon: ShieldCheck, permission: "settings.view" },
   { href: "/admin/usuarios", label: "Usuarios y permisos", icon: ShieldCheck, permission: "users.manage" },
 ];
 
@@ -150,7 +151,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <main className="flex-1 min-w-0 w-full">
         {counts.newOrders > 0 && can("orders.view") && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
-          <Link href="/admin/inbox" className="mx-3 sm:mx-5 md:mx-7 mt-3 sm:mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
+          <Link href="/admin/pedidos" className="mx-3 sm:mx-5 md:mx-7 mt-3 sm:mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
             <BellRing size={16} className="text-copper shrink-0" />
             <span>{counts.newOrders} pedido{counts.newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
           </Link>
