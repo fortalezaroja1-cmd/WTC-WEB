@@ -93,6 +93,7 @@ export default function AgentTestPage() {
           <p className="text-sm text-muted mt-1">La prueba y WhatsApp usan el mismo motor de decisión, catálogo y reglas comerciales.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/admin/agente/control" className="inline-flex items-center gap-2 text-xs border border-hair bg-white rounded-lg px-3 py-2 font-semibold"><ShieldCheck size={15}/>Centro de control</Link>
           <Link href="/admin/agente/estrategia" className="inline-flex items-center gap-2 text-xs border border-hair bg-white rounded-lg px-3 py-2 font-semibold"><BookOpen size={15}/>Ver estrategia completa</Link>
           <div className="inline-flex items-center gap-2 text-xs border border-green-200 bg-green-50 text-green-700 rounded-lg px-3 py-2"><ShieldCheck size={15} /> Modo seguro · solo lectura</div>
         </div>
