@@ -101,6 +101,7 @@ function forbidden(request: NextRequest, apiRequest: boolean, role: string, perm
 
 function requiredPermission(pathname: string, method: string): Permission | null {
   if (pathname.startsWith("/admin/usuarios")) return "users.manage";
+  if (pathname.startsWith("/admin/notificaciones")) return "dashboard.view";
   if (pathname.startsWith("/admin/inbox")) return "inbox.view";
   if (pathname.startsWith("/admin/crm")) return "crm.view";
   if (pathname.startsWith("/admin/cotizaciones")) return "crm.view";
@@ -117,6 +118,7 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/configuracion")) return "settings.view";
   if (pathname === "/admin") return "dashboard.view";
 
+  if (pathname.startsWith("/api/admin/notifications")) return "dashboard.view";
   if (pathname.startsWith("/api/admin/users")) return "users.manage";
   if (pathname.startsWith("/api/admin/invitations")) return "users.manage";
   if (pathname.startsWith("/api/admin/analytics")) return method === "GET" ? "analytics.view" : "analytics.export";
