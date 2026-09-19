@@ -58,10 +58,16 @@ export async function POST(req:NextRequest){
     let rolledBack=false;
     try{
       await prisma.$transaction(async(tx)=>{
-        const oppId=randomUUID(), quoteId=randomUUID(), activityId=randomUUID();
-        await tx.$executeRawUnsafe("INSERT INTO \"Opportunity\" (\"id\",\"title\",\"stage\",\"source\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,'NEW','SYSTEM_TEST',NOW(),NOW())",oppId,"Prueba transaccional Wired");
-        await tx.$executeRawUnsafe("INSERT INTO \"Quote\" (\"id\",\"number\",\"opportunityId\",\"status\",\"subtotal\",\"shipping\",\"total\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,$3,'DRAFT',0,0,0,NOW(),NOW())",quoteId,"TEST-"+randomUUID(),oppId);
-        await tx.$executeRawUnsafe("INSERT INTO \"SalesActivity\" (\"id\",\"opportunityId\",\"type\",\"text\",\"createdAt\") VALUES ($1,$2,'SYSTEM_TEST',$3,NOW())",activityId,oppId,"Prueba de escritura y relaciones");
+        const oppId=randomUUID(), quoteId=randomUUID(), activityId=randomUUID(), marker=randomUUID();
+        const customer=await tx.customer.create({data:{name:"Prueba Wired "+marker.slice(0,6),phone:"TEST-"+marker,city:"Bogotá",address:"Dirección de prueba"}});
+        await tx.$executeRawUnsafe("INSERT INTO \"Opportunity\" (\"id\",\"customerId\",\"customerName\",\"phone\",\"title\",\"stage\",\"source\",\"value\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,$3,$4,$5,'NEW','SYSTEM_TEST',1000,NOW(),NOW())",oppId,customer.id,customer.name,customer.phone,"Prueba transaccional Wired");
+        const quoteNumber="TEST-COT-"+marker;
+        await tx.$executeRawUnsafe("INSERT INTO \"Quote\" (\"id\",\"number\",\"opportunityId\",\"status\",\"customerName\",\"phone\",\"subtotal\",\"shipping\",\"total\",\"createdAt\",\"updatedAt\") VALUES ($1,$2,$3,'DRAFT',$4,$5,1000,0,1000,NOW(),NOW())",quoteId,quoteNumber,oppId,customer.name,customer.phone);
+        await tx.$executeRawUnsafe("INSERT INTO \"QuoteItem\" (\"id\",\"quoteId\",\"sku\",\"name\",\"qty\",\"unitPrice\",\"total\",\"createdAt\") VALUES ($1,$2,'TEST-SKU','Producto de prueba',1,1000,1000,NOW())",randomUUID(),quoteId);
+        const order=await tx.order.create({data:{number:"TEST-WT-"+marker,customerId:customer.id,subtotal:1000,shipping:0,total:1000,paymentMethod:"Prueba",items:{create:{name:"Producto de prueba",sku:"TEST-SKU",qty:1,unitPrice:1000,total:1000}},history:{create:{action:"Pedido de prueba transaccional",actor:"sistema"}}}});
+        await tx.$executeRawUnsafe("UPDATE \"Quote\" SET \"status\"='ACCEPTED',\"updatedAt\"=NOW() WHERE \"id\"=$1",quoteId);
+        await tx.$executeRawUnsafe("UPDATE \"Opportunity\" SET \"stage\"='WON',\"wonAt\"=NOW(),\"updatedAt\"=NOW() WHERE \"id\"=$1",oppId);
+        await tx.$executeRawUnsafe("INSERT INTO \"SalesActivity\" (\"id\",\"opportunityId\",\"type\",\"text\",\"meta\",\"createdAt\") VALUES ($1,$2,'SYSTEM_TEST',$3,$4::jsonb,NOW())",activityId,oppId,"Prueba completa de venta",JSON.stringify({orderId:order.id}));
         throw new Error("WIRED_SMOKE_ROLLBACK");
       });
     }catch(error:any){
@@ -71,7 +77,7 @@ export async function POST(req:NextRequest){
     if(!rolledBack)throw new Error("La prueba no confirmó rollback");
     const state=await snapshot();
     await writeAudit({actorUserId:session.userId,actorName:session.name,action:"SYSTEM_SMOKE_TEST",meta:{result:"OK"}});
-    return NextResponse.json({ok:true,message:"Flujo transaccional oportunidad → cotización → actividad validado y revertido sin dejar datos de prueba.",state});
+    return NextResponse.json({ok:true,message:"Flujo transaccional cliente → oportunidad → cotización → pedido → actividad validado y revertido sin dejar datos de prueba.",state});
   }catch(error:any){
     console.error("[SYSTEM_SMOKE_TEST]",error);
     return NextResponse.json({ok:false,error:error?.message||"Falló la prueba"},{status:500});
