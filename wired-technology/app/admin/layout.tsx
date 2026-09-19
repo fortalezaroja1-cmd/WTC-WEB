@@ -8,6 +8,7 @@ import { LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store,
 
 const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard, permission: "dashboard.view" },
+  { href: "/admin/notificaciones", label: "Notificaciones", icon: BellRing, permission: "dashboard.view" },
   { href: "/admin/inbox", label: "Bandeja", icon: BellRing, permission: "inbox.view" },
   { href: "/admin/crm", label: "CRM", icon: LayoutDashboard, permission: "crm.view" },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: ClipboardList, permission: "crm.view" },
@@ -103,7 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <nav className="flex-1 p-2.5 overflow-y-auto overscroll-contain">
         {NAV.filter((item) => can(item.permission)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
-          const badge = href === "/admin/pedidos" ? counts.newOrders : href === "/admin/crm" ? counts.newOpportunities : href === "/admin/inbox" ? counts.unreadConversations : 0;
+          const badge = href === "/admin/pedidos" ? counts.newOrders : href === "/admin/crm" ? counts.newOpportunities : href === "/admin/inbox" ? counts.unreadConversations : href === "/admin/notificaciones" ? counts.notifications : 0;
           return (
             <Link key={href} href={href} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium mb-0.5 transition-colors ${active ? "bg-slate-dark text-white" : "hover:bg-slate-dark/50"}`}>
               <Icon size={16} />
