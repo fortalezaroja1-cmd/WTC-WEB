@@ -144,10 +144,18 @@ export async function addSalesActivity(input: {
 export async function syncOpportunitiesFromLeads() {
   await ensureSalesTables();
   const leads = await prisma.$queryRawUnsafe<any[]>(`
-    SELECT "id","name","phone","source","status","assignedSellerId","assignedSellerName",
-           "capNextStep","capNextAt","createdAt","updatedAt"
-    FROM "Lead"
-    ORDER BY "updatedAt" DESC
+    SELECT l."id",l."name",l."phone",l."source",l."status",l."assignedSellerId",l."assignedSellerName",
+           l."capNextStep",l."capNextAt",l."createdAt",l."updatedAt",
+           c."id" AS "customerId",c."name" AS "customerRecordName",c."email",c."city"
+    FROM "Lead" l
+    LEFT JOIN LATERAL (
+      SELECT "id","name","email","city"
+      FROM "Customer"
+      WHERE "phone" = l."phone" AND l."phone" IS NOT NULL
+      ORDER BY "updatedAt" DESC
+      LIMIT 1
+    ) c ON true
+    ORDER BY l."updatedAt" DESC
     LIMIT 1000
   `);
 
@@ -156,12 +164,15 @@ export async function syncOpportunitiesFromLeads() {
     const title = lead.name ? `Venta · ${lead.name}` : `Oportunidad · ${lead.phone || "Cliente"}`;
     await prisma.$executeRawUnsafe(
       `INSERT INTO "Opportunity" (
-        "id","leadId","customerName","phone","title","stage","source","assignedSellerId","assignedSellerName",
+        "id","leadId","customerId","customerName","phone","email","city","title","stage","source","assignedSellerId","assignedSellerName",
         "nextAction","nextAt","createdAt","updatedAt"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       ON CONFLICT ("leadId") DO UPDATE SET
+        "customerId"=COALESCE(EXCLUDED."customerId","Opportunity"."customerId"),
         "customerName"=COALESCE(EXCLUDED."customerName","Opportunity"."customerName"),
         "phone"=COALESCE(EXCLUDED."phone","Opportunity"."phone"),
+        "email"=COALESCE(EXCLUDED."email","Opportunity"."email"),
+        "city"=COALESCE(EXCLUDED."city","Opportunity"."city"),
         "source"=COALESCE(EXCLUDED."source","Opportunity"."source"),
         "assignedSellerId"=COALESCE(EXCLUDED."assignedSellerId","Opportunity"."assignedSellerId"),
         "assignedSellerName"=COALESCE(EXCLUDED."assignedSellerName","Opportunity"."assignedSellerName"),
@@ -174,8 +185,11 @@ export async function syncOpportunitiesFromLeads() {
         "updatedAt"=GREATEST("Opportunity"."updatedAt",EXCLUDED."updatedAt")`,
       randomUUID(),
       lead.id,
-      lead.name || null,
+      lead.customerId || null,
+      lead.name || lead.customerRecordName || null,
       lead.phone || null,
+      lead.email || null,
+      lead.city || null,
       title,
       stage,
       lead.source || "CRM",
