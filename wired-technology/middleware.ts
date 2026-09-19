@@ -115,9 +115,11 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/devoluciones")) return "returns.view";
   if (pathname.startsWith("/admin/analitica")) return "analytics.view";
   if (pathname.startsWith("/admin/integraciones")) return "integrations.view";
+  if (pathname.startsWith("/admin/auditoria")) return "settings.view";
   if (pathname.startsWith("/admin/configuracion")) return "settings.view";
   if (pathname === "/admin") return "dashboard.view";
 
+  if (pathname.startsWith("/api/admin/audit")) return "settings.view";
   if (pathname.startsWith("/api/admin/notifications")) return "dashboard.view";
   if (pathname.startsWith("/api/admin/users")) return "users.manage";
   if (pathname.startsWith("/api/admin/invitations")) return "users.manage";
