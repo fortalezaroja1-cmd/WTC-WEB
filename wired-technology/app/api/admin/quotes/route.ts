@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { addSalesActivity, ensureSalesTables, makeQuoteNumber } from "@/lib/sales-system";
+import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,8 @@ export async function POST(req: NextRequest) {
       if (opp.leadId) await tx.$executeRawUnsafe(`UPDATE "Lead" SET "status"='QUOTED',"updatedAt"=NOW() WHERE "id"=$1 AND "status" NOT IN ('CLOSED','LOST')`, opp.leadId);
     });
 
-    await addSalesActivity({ opportunityId, type: "QUOTE_CREATED", text: `Cotización ${number} creada por $${Math.round(total).toLocaleString("es-CO")}`, actorUserId: session.userId, actorName: session.name, meta: { quoteId, number, total } });
+    await addSalesActivity({ opportunityId, type: "QUOTE_CREATED", text: `Cotización ${number} creada por ${Math.round(total).toLocaleString("es-CO")}`, actorUserId: session.userId, actorName: session.name, meta: { quoteId, number, total } });
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "QUOTE_CREATED", meta: { quoteId, number, opportunityId, total } });
     return NextResponse.json(await quoteDetail(quoteId), { status: 201 });
   } catch (error: any) {
     console.error("[QUOTES_POST]", error);
@@ -186,6 +188,7 @@ export async function PUT(req: NextRequest) {
         return created;
       });
       await addSalesActivity({ opportunityId: current.opportunityId, type: "ORDER_CREATED", text: `${current.number} convertida en pedido ${order.number}`, actorUserId: session.userId, actorName: session.name, meta: { orderId: order.id } });
+      await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "QUOTE_CONVERTED_TO_ORDER", meta: { quoteId: id, quoteNumber: current.number, orderId: order.id, orderNumber: order.number } });
       return NextResponse.json({ ok: true, orderId: order.id, orderNumber: order.number });
     }
 
@@ -199,6 +202,7 @@ export async function PUT(req: NextRequest) {
       await prisma.$executeRawUnsafe(`UPDATE "Opportunity" SET "stage"='NEGOTIATION',"updatedAt"=NOW() WHERE "id"=$1 AND "stage" NOT IN ('WON','LOST')`, current.opportunityId);
     }
     await addSalesActivity({ opportunityId: current.opportunityId, type: "QUOTE_STATUS", text: `${current.number}: ${status}`, actorUserId: session.userId, actorName: session.name });
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "QUOTE_STATUS_CHANGED", meta: { quoteId: id, number: current.number, status } });
     return NextResponse.json(await quoteDetail(id));
   } catch (error: any) {
     console.error("[QUOTES_PUT]", error);
