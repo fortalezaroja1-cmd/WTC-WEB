@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncLeadStageByPhone } from "@/lib/sales-agent";
+import { getSession } from "@/lib/auth";
+import { writeAudit } from "@/lib/audit";
 
 type OrderMeta = {
   requestId: string;
@@ -83,6 +85,8 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     const body = await req.json();
     const { id, paymentStatus, shipStatus, guide, publicNotes, assignedSellerId, assignedSellerName, internalNote, action } = body;
 
@@ -124,6 +128,7 @@ export async function PUT(req: NextRequest) {
           history: { orderBy: { createdAt: "desc" } },
         },
       });
+      await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "ORDER_STOCK_VALIDATED", meta: { orderId: id, orderNumber: updated.number } });
       return NextResponse.json({ ...enrich(updated), availability });
     }
 
@@ -189,6 +194,7 @@ export async function PUT(req: NextRequest) {
       });
 
       await syncOrderLead(confirmed, "SCHEDULED", `Pedido ${confirmed.number} confirmado · lead movido automáticamente a Programado`);
+      await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "ORDER_CONFIRMED", meta: { orderId: id, orderNumber: confirmed.number, inventoryApplied: true } });
       return NextResponse.json(enrich(confirmed));
     }
 
@@ -255,6 +261,7 @@ export async function PUT(req: NextRequest) {
         });
       });
       await syncOrderLead(cancelled, "LOST", `Pedido ${cancelled.number} cancelado · lead movido automáticamente a Perdido`);
+      await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "ORDER_CANCELLED", meta: { orderId: id, orderNumber: cancelled.number, inventoryRestored: true } });
       return NextResponse.json(enrich(cancelled));
     }
 
@@ -280,6 +287,7 @@ export async function PUT(req: NextRequest) {
       await syncOrderLead(order, "LOST", `Pedido ${order.number} cancelado · lead movido automáticamente a Perdido`);
     }
 
+    await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "ORDER_UPDATED", meta: { orderId: id, orderNumber: order.number, changes: historyEntries } });
     return NextResponse.json(enrich(order));
   } catch (error: any) {
     if (error?.message === "NOT_FOUND") return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
