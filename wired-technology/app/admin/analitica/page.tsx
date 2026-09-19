@@ -57,6 +57,7 @@ function humanTime(seconds: number | null | undefined) {
 
 export default function AnaliticaPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [opportunities, setOpportunities] = useState<any[]>([]);
   const [conversationData, setConversationData] = useState<ConversationAnalytics>({ sellers: [], metrics: [], conversations: [] });
   const [days, setDays] = useState("30");
   const [sellerId, setSellerId] = useState("ALL");
@@ -64,9 +65,13 @@ export default function AnaliticaPage() {
   const [responseError, setResponseError] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/orders", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setOrders(Array.isArray(d) ? d : []));
+    Promise.all([
+      fetch("/api/admin/orders", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/admin/opportunities", { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([o, opp]) => {
+      setOrders(Array.isArray(o) ? o : []);
+      setOpportunities(Array.isArray(opp) ? opp : []);
+    });
   }, []);
 
   const loadResponses = async () => {
@@ -133,6 +138,22 @@ export default function AnaliticaPage() {
   const products = Object.entries(data.byProduct).sort((a, b) => b[1].qty - a[1].qty).slice(0, 8);
   const maxSeller = Math.max(1, ...sellers.map((x) => x[1].value));
 
+  const commercial = useMemo(() => {
+    const stages = ["NEW","CONTACTED","QUOTED","NEGOTIATION","WON","LOST"];
+    const byStage = stages.map(stage => ({
+      stage,
+      count: opportunities.filter((o:any) => o.stage === stage).length,
+      value: opportunities.filter((o:any) => o.stage === stage).reduce((s:number,o:any)=>s+Number(o.value||0),0),
+    }));
+    const won = opportunities.filter((o:any)=>o.stage==="WON").length;
+    const lost = opportunities.filter((o:any)=>o.stage==="LOST").length;
+    const open = opportunities.filter((o:any)=>["NEW","CONTACTED","QUOTED","NEGOTIATION"].includes(o.stage));
+    const overdue = open.filter((o:any)=>o.nextAt&&new Date(o.nextAt).getTime()<Date.now()).length;
+    const losses: Record<string,number> = {};
+    opportunities.filter((o:any)=>o.stage==="LOST").forEach((o:any)=>{const key=o.lossReason||"Sin motivo";losses[key]=(losses[key]||0)+1;});
+    return { byStage, won, lost, overdue, conversion: won+lost ? won/(won+lost)*100 : 0, losses };
+  }, [opportunities]);
+
   const responseSummary = useMemo(() => {
     const metrics = conversationData.metrics || [];
     const totalResponses = metrics.reduce((sum, item) => sum + Number(item.responsesMeasured || 0), 0);
@@ -165,6 +186,14 @@ export default function AnaliticaPage() {
         <Metric label="Tasa de cierre" value={`${data.rate.toFixed(1)}%`} />
         <Metric label="Ticket promedio" value={formatCOP(data.avg)} />
       </div>
+
+      <section className="bg-white border border-hair rounded-xl p-5 mb-5">
+        <div className="flex items-end justify-between gap-3 mb-4"><div><h2 className="font-semibold">Embudo comercial</h2><p className="text-xs text-muted mt-1">Conversión desde oportunidad hasta venta ganada.</p></div><div className="text-right"><div className="text-[10px] text-muted uppercase">Conversión</div><div className="font-display text-xl font-bold text-copper">{commercial.conversion.toFixed(1)}%</div></div></div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {commercial.byStage.map((s:any)=><div key={s.stage} className="bg-paper rounded-lg p-3"><div className="text-[9px] uppercase tracking-wider text-muted">{({NEW:"Nuevo",CONTACTED:"Contactado",QUOTED:"Cotizado",NEGOTIATION:"Negociación",WON:"Ganado",LOST:"Perdido"} as any)[s.stage]||s.stage}</div><div className="font-display text-lg font-bold mt-1">{s.count}</div><div className="text-[9px] text-muted mt-1">{formatCOP(s.value)}</div></div>)}
+        </div>
+        <div className="mt-4 text-xs text-muted">Seguimientos vencidos: <b className={commercial.overdue?"text-alert":"text-slate-dark"}>{commercial.overdue}</b>{Object.keys(commercial.losses).length>0&&<span> · Motivos de pérdida: {Object.entries(commercial.losses).slice(0,4).map(([k,v])=>k+" ("+v+")").join(" · ")}</span>}</div>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-8">
         <section className="bg-white border border-hair rounded-xl p-5">
