@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 async function quoteDetail(id: string) {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     `SELECT q.*, o."title" AS "opportunityTitle", o."stage" AS "opportunityStage",
-            o."assignedSellerId", o."assignedSellerName", o."leadId", o."city"
+            o."assignedSellerId", o."assignedSellerName", o."leadId", o."customerId", o."city", o."address", o."email"
      FROM "Quote" q JOIN "Opportunity" o ON o."id"=q."opportunityId"
      WHERE q."id"=$1 LIMIT 1`,
     id
@@ -139,9 +139,28 @@ export async function PUT(req: NextRequest) {
     if (!current) return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
 
     if (body?.action === "convert-to-order") {
-      const customer = current.phone ? await prisma.customer.findFirst({ where: { phone: current.phone } }) : null;
+      let customer = current.customerId ? await prisma.customer.findUnique({ where: { id: current.customerId } }) : current.phone ? await prisma.customer.findFirst({ where: { phone: current.phone }, orderBy: { updatedAt: "desc" } }) : null;
+      if (!customer && current.customerName && current.phone) {
+        customer = await prisma.customer.create({
+          data: {
+            name: current.customerName,
+            phone: current.phone,
+            email: current.email || null,
+            city: current.city || null,
+            address: current.address || null,
+            notes: "Cliente creado desde cotización "+current.number,
+          },
+        });
+        await prisma.$executeRawUnsafe('UPDATE "Opportunity" SET "customerId"=$2,"updatedAt"=NOW() WHERE "id"=$1', current.opportunityId, customer.id);
+      } else if (customer) {
+        const fill:any={};
+        if (!customer.email && current.email) fill.email=current.email;
+        if (!customer.city && current.city) fill.city=current.city;
+        if (!customer.address && current.address) fill.address=current.address;
+        if (Object.keys(fill).length) customer=await prisma.customer.update({where:{id:customer.id},data:fill});
+      }
       if (!customer?.address || !customer?.city || !customer?.phone) {
-        return NextResponse.json({ error: "Completa teléfono, ciudad y dirección del cliente antes de convertir la cotización en pedido" }, { status: 409 });
+        return NextResponse.json({ error: "Completa teléfono, ciudad y dirección en la oportunidad antes de convertir la cotización en pedido" }, { status: 409 });
       }
       const existing = await prisma.order.findFirst({ where: { notes: { contains: `quote:${id}` } }, select: { id: true, number: true } });
       if (existing) return NextResponse.json({ ok: true, orderId: existing.id, orderNumber: existing.number, duplicate: true });
