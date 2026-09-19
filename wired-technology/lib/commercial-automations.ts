@@ -27,14 +27,14 @@ export async function runCommercialAutomations(){
   try{cfg={...cfg,...JSON.parse(setting?.value||"{}")}}catch{}
 
   await prisma.$executeRawUnsafe(
-    'UPDATE "Quote" SET "status"=\\'EXPIRED\\',"updatedAt"=NOW() WHERE "status" IN (\\'DRAFT\\',\\'SENT\\') AND "validUntil" IS NOT NULL AND "validUntil" < NOW()'
+    "UPDATE \"Quote\" SET \"status\"='EXPIRED',\"updatedAt\"=NOW() WHERE \"status\" IN ('DRAFT','SENT') AND \"validUntil\" IS NOT NULL AND \"validUntil\" < NOW()"
   );
 
   let created=0;
 
   if(cfg.unassignedAlert){
     const rows=await prisma.$queryRawUnsafe<any[]>(
-      'SELECT "id","customerName","title" FROM "Opportunity" WHERE "stage" IN (\\'NEW\\',\\'CONTACTED\\',\\'QUOTED\\',\\'NEGOTIATION\\') AND "assignedSellerId" IS NULL ORDER BY "updatedAt" DESC LIMIT 20'
+      "SELECT \"id\",\"customerName\",\"title\" FROM \"Opportunity\" WHERE \"stage\" IN ('NEW','CONTACTED','QUOTED','NEGOTIATION') AND \"assignedSellerId\" IS NULL ORDER BY \"updatedAt\" DESC LIMIT 20"
     );
     for(const row of rows){
       const msg="Oportunidad sin responsable: "+(row.customerName||row.title);
@@ -44,7 +44,7 @@ export async function runCommercialAutomations(){
 
   if(cfg.followup24h){
     const rows=await prisma.$queryRawUnsafe<any[]>(
-      'SELECT "id","customerName","title","nextAction" FROM "Opportunity" WHERE "stage" IN (\\'NEW\\',\\'CONTACTED\\',\\'QUOTED\\',\\'NEGOTIATION\\') AND "nextAt" IS NOT NULL AND "nextAt" <= NOW() ORDER BY "nextAt" ASC LIMIT 30'
+      "SELECT \"id\",\"customerName\",\"title\",\"nextAction\" FROM \"Opportunity\" WHERE \"stage\" IN ('NEW','CONTACTED','QUOTED','NEGOTIATION') AND \"nextAt\" IS NOT NULL AND \"nextAt\" <= NOW() ORDER BY \"nextAt\" ASC LIMIT 30"
     );
     for(const row of rows){
       const msg="Seguimiento vencido: "+(row.customerName||row.title)+(row.nextAction?" · "+row.nextAction:"");
