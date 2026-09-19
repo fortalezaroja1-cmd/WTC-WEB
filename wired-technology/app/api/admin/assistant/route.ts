@@ -17,6 +17,8 @@ export async function POST(req:NextRequest){
   const session=await getSession(); if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
   const body=await req.json().catch(()=>null); const text=String(body?.text||"").trim(); if(!text)return NextResponse.json({error:"Escribe una consulta"},{status:400});
   const q=norm(text); const sources:string[]=[];
+  const settings=await prisma.siteSetting.findMany({where:{key:{in:["agentTeamMission","agentTeamRules","agentTeamPriorities","agentTeamEscalation"]}}});
+  const knowledge=Object.fromEntries(settings.map(s=>[s.key,s.value]));
 
   if(/(stock|inventario|agotad|existencia|producto)/.test(q)){
    if(!allowed(session,"inventory.view")&&!allowed(session,"products.view"))return NextResponse.json(deny());
@@ -48,12 +50,17 @@ export async function POST(req:NextRequest){
    sources.push("CRM"); return NextResponse.json({reply:`CRM: ${open.length} leads abiertos. ${mine.length} están asignados a ti y ${overdue.length} tienen seguimiento vencido. Prioridad: ${(mine.length?mine:overdue.length?overdue:open).slice(0,6).map(x=>`${x.name||x.phone||"Lead"} · ${x.status}${x.capNextStep?` · ${x.capNextStep}`:""}`).join("; ")||"sin pendientes"}.`,sources});
   }
 
+  if(/(regla|politica|como debo|como trabajo|prioridad del equipo|cuando escalo|escalar)/.test(q)){
+   sources.push("Conocimiento del agente");
+   return NextResponse.json({reply:`Mi guía interna actual es: ${knowledge.agentTeamMission||"Ayudar al equipo a vender y operar con información real de Wired."} Prioridades: ${knowledge.agentTeamPriorities||"clientes y seguimientos vencidos; pedidos abiertos; inventario crítico."} Reglas: ${knowledge.agentTeamRules||"No inventar datos, precios, stock, descuentos ni estados. Si Wired no tiene el dato, decirlo."} Escalamiento: ${knowledge.agentTeamEscalation||"Ante excepciones, reclamos, descuentos no autorizados o información insuficiente, pedir intervención humana."}`,sources});
+  }
+
   if(/(tarea|que hago|que debo|prioridad|hoy)/.test(q)){
    const parts:string[]=[];
    if(allowed(session,"crm.view")){await ensureCrmTables();const leads=await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Lead" WHERE "status" NOT IN ('CLOSED','LOST') ORDER BY "updatedAt" DESC LIMIT 200`);const mine=leads.filter(x=>x.assignedSellerId===session.userId);parts.push(`${mine.length} leads abiertos asignados a ti`);sources.push("CRM");}
    if(allowed(session,"orders.view")){const n=await prisma.order.count({where:{shipStatus:{in:["PENDING_PAYMENT","READY","APPROVED","PREPARING","SHIPPED"]}}});parts.push(`${n} pedidos abiertos`);sources.push("Pedidos");}
    if(allowed(session,"inventory.view")){const n=await prisma.product.count({where:{stock:{lte:5}}});parts.push(`${n} productos base con stock ≤ 5`);sources.push("Inventario");}
-   return NextResponse.json({reply:parts.length?`Tu panorama ahora: ${parts.join(", ")}. Puedes preguntarme por CRM, pedidos, ventas o inventario para ver el detalle.`:"No tienes módulos operativos habilitados para construir un resumen.",sources});
+   return NextResponse.json({reply:parts.length?`Tu panorama ahora: ${parts.join(", ")}. ${knowledge.agentTeamPriorities?`Según la guía del equipo, prioriza: ${knowledge.agentTeamPriorities}`:"Prioriza seguimientos vencidos, clientes activos, pedidos abiertos e inventario crítico."}`:"No tienes módulos operativos habilitados para construir un resumen.",sources});
   }
 
   return NextResponse.json({reply:"Puedo consultar datos reales de Wired sobre CRM y seguimientos, pedidos, ventas e inventario. Por ejemplo: “¿qué debo atender hoy?”, “¿qué pedidos están abiertos?”, “¿cómo van las ventas?” o “¿qué tiene stock bajo?”.",sources});
