@@ -34,7 +34,7 @@ export default function CrmPage() {
     const d=await r.json();
     if(r.ok)setItems(Array.isArray(d)?d:[]);
   };
-  useEffect(()=>{load();fetch("/api/admin/sales-users",{cache:"no-store"}).then(r=>r.ok?r.json():[]).then(setSellers).catch(()=>setSellers([]));},[]);
+  useEffect(()=>{load().then(()=>{const id=new URLSearchParams(window.location.search).get("opportunityId");if(id)openDetail(id);});fetch("/api/admin/sales-users",{cache:"no-store"}).then(r=>r.ok?r.json():[]).then(setSellers).catch(()=>setSellers([]));},[]);
   const current=useMemo(()=>detail||items.find(x=>x.id===selected),[items,selected,detail]);
 
   const openDetail=async(id:string)=>{
