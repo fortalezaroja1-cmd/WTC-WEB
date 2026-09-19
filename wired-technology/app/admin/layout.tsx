@@ -9,6 +9,7 @@ const NAV = [
   { href: "/admin", label: "Panel", icon: LayoutDashboard, permission: "dashboard.view" },
   { href: "/admin/inbox", label: "Bandeja", icon: BellRing, permission: "inbox.view" },
   { href: "/admin/crm", label: "CRM", icon: LayoutDashboard, permission: "crm.view" },
+  { href: "/admin/cotizaciones", label: "Cotizaciones", icon: ClipboardList, permission: "crm.view" },
   { href: "/admin/agente", label: "Probar agente", icon: Bot, permission: "agent.use" },
   { href: "/admin/tareas", label: "Tareas", icon: ClipboardList, permission: "tasks.view" },
   { href: "/admin/automatizaciones", label: "Automatizaciones", icon: Settings, permission: "automations.view" },
@@ -26,7 +27,7 @@ const NAV = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [newOrders, setNewOrders] = useState(0);
+  const [counts, setCounts] = useState({ newOrders: 0, unreadConversations: 0, newOpportunities: 0, notifications: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [session, setSession] = useState<{ role: string; name: string; permissions: string[] } | null>(null);
 
@@ -56,14 +57,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
-    if (session && session.role !== "ADMIN" && !session.permissions?.includes("orders.view")) return;
     let active = true;
     const refresh = async () => {
       try {
-        const res = await fetch("/api/admin/orders", { cache: "no-store" });
+        const res = await fetch("/api/admin/nav-counts", { cache: "no-store" });
         if (!res.ok) return;
-        const orders = await res.json();
-        if (active) setNewOrders(orders.filter((o: any) => o.shipStatus === "PENDING_PAYMENT").length);
+        const data = await res.json();
+        if (active) setCounts({
+          newOrders: Number(data.newOrders || 0),
+          unreadConversations: Number(data.unreadConversations || 0),
+          newOpportunities: Number(data.newOpportunities || 0),
+          notifications: Number(data.notifications || 0),
+        });
       } catch {}
     };
     refresh();
@@ -97,12 +102,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <nav className="flex-1 p-2.5 overflow-y-auto overscroll-contain">
         {NAV.filter((item) => can(item.permission)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
-          const showBadge = href === "/admin/pedidos" || href === "/admin/crm" || href === "/admin/inbox";
+          const badge = href === "/admin/pedidos" ? counts.newOrders : href === "/admin/crm" ? counts.newOpportunities : href === "/admin/inbox" ? counts.unreadConversations : 0;
           return (
             <Link key={href} href={href} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium mb-0.5 transition-colors ${active ? "bg-slate-dark text-white" : "hover:bg-slate-dark/50"}`}>
               <Icon size={16} />
               <span className="flex-1">{label}</span>
-              {showBadge && newOrders > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</span>}
+              {badge > 0 && <span className="min-w-5 h-5 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{badge}</span>}
             </Link>
           );
         })}
@@ -126,8 +131,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
         <div className="font-display font-bold text-[14px]">WIRED<span className="text-copper">·</span>TECH</div>
         <div className="w-9 flex justify-end">
-          {newOrders > 0 && can("inbox.view") && (
-            <Link href="/admin/inbox" className="min-w-6 h-6 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{newOrders}</Link>
+          {counts.unreadConversations > 0 && can("inbox.view") && (
+            <Link href="/admin/inbox" className="min-w-6 h-6 px-1.5 rounded-full bg-copper text-white text-[10px] font-bold flex items-center justify-center">{counts.unreadConversations}</Link>
           )}
         </div>
       </header>
@@ -142,10 +147,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       <main className="flex-1 min-w-0 w-full">
-        {newOrders > 0 && can("inbox.view") && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
+        {counts.newOrders > 0 && can("orders.view") && !["/admin/pedidos", "/admin/crm"].includes(pathname) && !pathname.startsWith("/admin/inbox") && (
           <Link href="/admin/inbox" className="mx-3 sm:mx-5 md:mx-7 mt-3 sm:mt-5 flex items-center gap-2 rounded-lg border border-copper/30 bg-amber-50 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold text-slate-dark hover:border-copper transition-colors">
             <BellRing size={16} className="text-copper shrink-0" />
-            <span>{newOrders} pedido{newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
+            <span>{counts.newOrders} pedido{counts.newOrders === 1 ? " nuevo" : "s nuevos"} sin revisar</span>
           </Link>
         )}
         <div className="p-3 sm:p-5 md:p-7 min-w-0">{children}</div>
