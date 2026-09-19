@@ -22,6 +22,8 @@ async function snapshot(){
     prisma.variant.count({where:{stock:{lt:0}}}),
     prisma.$queryRawUnsafe<Array<{count:number}>>('SELECT COUNT(*)::int AS "count" FROM "Quote" q LEFT JOIN "Opportunity" o ON o."id"=q."opportunityId" WHERE o."id" IS NULL'),
   ]);
+  const rlsRows=await prisma.$queryRawUnsafe<any[]>(`SELECT c.relname AS "table", c.relrowsecurity AS "enabled" FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=\'public\' AND c.relname IN (\'Lead\',\'CrmMessage\',\'CrmActivity\',\'AdminAuditLog\',\'ShippingProfile\',\'SystemSecret\')`);
+  const rlsDisabled=rlsRows.filter(x=>!x.enabled).map(x=>x.table);
   const negativeCount=negativeProducts+negativeVariants;
   const orphanCount=Number(orphanQuotes[0]?.count||0);
   const checks=[
@@ -30,6 +32,7 @@ async function snapshot(){
     {key:"sales",label:"Sistema de ventas",status:"OK",detail:"Oportunidades y cotizaciones disponibles"},
     {key:"inventory",label:"Integridad de inventario",status:negativeCount>0?"WARN":"OK",detail:negativeCount>0?String(negativeCount)+" referencias con stock negativo":"Sin stock negativo"},
     {key:"quotes",label:"Integridad de cotizaciones",status:orphanCount>0?"WARN":"OK",detail:orphanCount>0?String(orphanCount)+" cotizaciones sin oportunidad":"Sin cotizaciones huérfanas"},
+    {key:"rls",label:"Seguridad RLS",status:rlsDisabled.length?"WARN":"OK",detail:rlsDisabled.length?"RLS desactivado en: "+rlsDisabled.join(", "):"RLS activo en tablas sensibles revisadas"},
     {key:"jwt",label:"Seguridad de sesión",status:process.env.JWT_SECRET?.trim()?"OK":"ERROR",detail:process.env.JWT_SECRET?.trim()?"JWT_SECRET configurado":"Falta JWT_SECRET"},
     {key:"db_env",label:"Configuración de base",status:process.env.DATABASE_URL?.trim()?"OK":"ERROR",detail:process.env.DATABASE_URL?.trim()?"DATABASE_URL configurada":"Falta DATABASE_URL"},
   ];
