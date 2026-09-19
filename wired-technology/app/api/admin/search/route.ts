@@ -58,15 +58,12 @@ export async function GET(req: NextRequest){
     if(can("crm.view")){
       await ensureSalesTables();
       const like="%"+q+"%";
-      const opps=await prisma.$queryRawUnsafe<any[]>(
-        'SELECT "id","customerName","phone","title","stage","value" FROM "Opportunity" WHERE COALESCE("customerName",\\'\\') ILIKE $1 OR COALESCE("phone",\\'\\') ILIKE $1 OR "title" ILIKE $1 ORDER BY "updatedAt" DESC LIMIT 6',
-        like
-      );
+      const oppSql="SELECT \"id\",\"customerName\",\"phone\",\"title\",\"stage\",\"value\" FROM \"Opportunity\" WHERE COALESCE(\"customerName\", '') ILIKE $1 OR COALESCE(\"phone\", '') ILIKE $1 OR \"title\" ILIKE $1 ORDER BY \"updatedAt\" DESC LIMIT 6";
+      const opps=await prisma.$queryRawUnsafe<any[]>(oppSql,like);
       results.push(...opps.map(o=>({type:"Oportunidad",title:o.customerName||o.title,subtitle:o.title+" · "+o.stage,href:"/admin/crm?opportunityId="+o.id})));
-      const quotes=await prisma.$queryRawUnsafe<any[]>(
-        'SELECT "id","number","customerName","status","total" FROM "Quote" WHERE "number" ILIKE $1 OR COALESCE("customerName",\\'\\') ILIKE $1 ORDER BY "updatedAt" DESC LIMIT 6',
-        like
-      );
+
+      const quoteSql="SELECT \"id\",\"number\",\"customerName\",\"status\",\"total\" FROM \"Quote\" WHERE \"number\" ILIKE $1 OR COALESCE(\"customerName\", '') ILIKE $1 ORDER BY \"updatedAt\" DESC LIMIT 6";
+      const quotes=await prisma.$queryRawUnsafe<any[]>(quoteSql,like);
       results.push(...quotes.map(x=>({type:"Cotización",title:x.number,subtitle:(x.customerName||"Cliente")+" · "+x.status,href:"/admin/cotizaciones"})));
     }
 
