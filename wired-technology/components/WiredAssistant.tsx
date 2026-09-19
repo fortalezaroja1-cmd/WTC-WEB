@@ -11,7 +11,7 @@ export default function WiredAssistant({ audience }: Props) {
   const [state,setState]=useState<Record<string,unknown>>({});
   const [turns,setTurns]=useState<Turn[]>([{role:"agent",text: audience==="team" ? "Hola. Soy el asistente de Wired. Puedo ayudarte con catálogo, ventas y dudas de operación." : "Hola 👋 Soy el asistente de Wired. ¿Qué producto estás buscando?"}]);
   const send=async()=>{const q=text.trim(); if(!q||busy)return; setText(""); setTurns(v=>[...v,{role:"user",text:q}]); setBusy(true);
-    try { const r=await fetch("/api/assistant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:q,state,audience})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); setState(d.state||{}); setTurns(v=>[...v,{role:"agent",text:d.reply||"¿En qué más te ayudo?"}]); }
+    try { const r=await fetch(audience==="team"?"/api/admin/assistant":"/api/assistant",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:q,state,audience})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); setState(d.state||state); setTurns(v=>[...v,{role:"agent",text:d.reply||"¿En qué más te ayudo?"}]); }
     catch { setTurns(v=>[...v,{role:"agent",text:"No pude procesar eso en este momento. Intenta nuevamente."}]); } finally {setBusy(false);}
   };
   return <>
