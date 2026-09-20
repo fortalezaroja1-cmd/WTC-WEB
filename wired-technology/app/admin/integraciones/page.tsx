@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -11,6 +12,7 @@ import {
   RefreshCw,
   Unplug,
   UserRound,
+  Bot,
 } from "lucide-react";
 
 type Connection = {
@@ -196,6 +198,8 @@ export default function IntegracionesPage() {
 
     {message && <div className="mb-4 rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3 text-sm flex gap-2"><CheckCircle2 size={17}/>{message}</div>}
     {error && <div className="mb-4 rounded-xl border border-red-100 bg-red-50 text-alert px-4 py-3 text-sm flex gap-2"><AlertTriangle size={17}/><span>{error}</span></div>}
+
+    <Link href="/admin/integraciones/ia" className="mb-5 block rounded-xl border border-copper/20 bg-[#FFF9F4] p-5 hover:border-copper transition-colors"><div className="flex items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-white border border-hair flex items-center justify-center text-copper"><Bot size={22}/></div><div><div className="font-semibold">Inteligencia artificial</div><div className="text-xs text-muted mt-1">Conecta OpenAI, Anthropic o Gemini con API key y prueba cada modelo en un chat.</div></div></div><span className="text-xs font-semibold text-copper whitespace-nowrap">Configurar →</span></div></Link>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <ChannelCard
