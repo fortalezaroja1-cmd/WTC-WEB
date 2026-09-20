@@ -121,6 +121,8 @@ function requiredPermission(pathname: string, method: string): Permission | null
   if (pathname.startsWith("/admin/configuracion")) return "settings.view";
   if (pathname === "/admin") return "dashboard.view";
 
+  if (pathname.startsWith("/api/admin/ai/providers")) return method === "GET" ? "integrations.view" : "integrations.manage";
+  if (pathname.startsWith("/api/admin/ai/chat")) return "agent.use";
   if (pathname.startsWith("/api/admin/activity")) return "dashboard.view";
   if (pathname.startsWith("/api/admin/audit")) return "settings.view";
   if (pathname.startsWith("/api/admin/notifications")) return "dashboard.view";
