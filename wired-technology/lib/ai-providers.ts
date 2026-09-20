@@ -36,7 +36,7 @@ function decrypt(value:string){
 
 async function getSecretRow(key:string){
   const rows=await prisma.$queryRawUnsafe<Array<{key:string;value:string;updatedAt:Date}>>(
-    'SELECT "key","value","updatedAt" FROM "SystemSecret" WHERE "key"=$1 LIMIT 1',
+    'SELECT "key","value","updatedAt" FROM "AiCredential" WHERE "key"=$1 LIMIT 1',
     key
   );
   return rows[0]||null;
@@ -53,13 +53,13 @@ export async function saveAiApiKey(provider:AiProviderId,apiKey:string){
   const meta=AI_PROVIDERS[provider];
   const value=encrypt(apiKey.trim());
   await prisma.$executeRawUnsafe(
-    'INSERT INTO "SystemSecret" ("key","value","updatedAt") VALUES ($1,$2,NOW()) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value","updatedAt"=NOW()',
+    'INSERT INTO "AiCredential" ("key","value","updatedAt") VALUES ($1,$2,NOW()) ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value","updatedAt"=NOW()',
     meta.secretKey,value
   );
 }
 
 export async function deleteAiApiKey(provider:AiProviderId){
-  await prisma.$executeRawUnsafe('DELETE FROM "SystemSecret" WHERE "key"=$1',AI_PROVIDERS[provider].secretKey);
+  await prisma.$executeRawUnsafe('DELETE FROM "AiCredential" WHERE "key"=$1',AI_PROVIDERS[provider].secretKey);
 }
 
 export async function getProviderStatus(provider:AiProviderId){
