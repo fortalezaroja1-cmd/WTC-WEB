@@ -10,11 +10,35 @@ export async function GET(request: NextRequest) {
   const pageToken = process.env.META_PAGE_ACCESS_TOKEN?.trim();
   if (pageToken) {
     try {
-      const page = await fetchFacebookPageProfile(pageToken);
-      const pageId = String(page?.id || "");
-      if (!pageId) throw new Error("Meta no devolvió el ID de la página");
+      const configuredPageId = process.env.META_PAGE_ID?.trim() || "";
+      let pageId = configuredPageId;
+      let pageName: string | null = null;
+
+      // A Page access token generated from Messenger setup may not include
+      // pages_read_engagement. In that case /me cannot be read, even though
+      // the token can still be used for Messenger/webhook operations.
+      if (!pageId) {
+        const page = await fetchFacebookPageProfile(pageToken);
+        pageId = String(page?.id || "");
+        pageName = page?.name ? String(page.name) : null;
+      }
+
+      if (!pageId) {
+        throw new Error("Falta META_PAGE_ID y Meta no devolvió el ID de la página");
+      }
+
       await subscribeFacebookPage(pageId, pageToken);
-      await saveMetaConnection({ channel: "MESSENGER", externalAccountId: pageId, accountName: page?.name ? String(page.name) : null, accessToken: pageToken, scopes: ["pages_show_list","pages_manage_metadata","pages_messaging"], metadata: { webhookSubscribed: true, source: "META_PAGE_ACCESS_TOKEN" } });
+      await saveMetaConnection({
+        channel: "MESSENGER",
+        externalAccountId: pageId,
+        accountName: pageName,
+        accessToken: pageToken,
+        scopes: ["pages_manage_metadata", "pages_messaging"],
+        metadata: {
+          webhookSubscribed: true,
+          source: configuredPageId ? "META_PAGE_ACCESS_TOKEN+META_PAGE_ID" : "META_PAGE_ACCESS_TOKEN",
+        },
+      });
       return NextResponse.redirect(`${base}/admin/integraciones?connected=facebook&count=1`);
     } catch (error: any) {
       console.error("[META_FACEBOOK_PAGE_TOKEN]", error);
