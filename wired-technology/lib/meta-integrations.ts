@@ -39,26 +39,25 @@ export function publicBaseUrl(fallbackOrigin?: string) {
 export function metaEnvStatus(origin?: string) {
   const base = publicBaseUrl(origin);
   const facebookAppId = process.env.META_APP_ID?.trim() || "";
-  const instagramAppId = process.env.META_INSTAGRAM_APP_ID?.trim() || facebookAppId;
+  const instagramAppId = process.env.META_INSTAGRAM_APP_ID?.trim() || "";
   const appSecret = process.env.META_APP_SECRET?.trim() || "";
-  const pageAccessToken = process.env.META_PAGE_ACCESS_TOKEN?.trim() || "";
-  const instagramSecret = process.env.META_INSTAGRAM_APP_SECRET?.trim() || appSecret;
+  const instagramSecret = process.env.META_INSTAGRAM_APP_SECRET?.trim() || "";
   const whatsappConfigId = process.env.META_WHATSAPP_CONFIG_ID?.trim() || "";
 
   return {
     graphVersion: metaGraphVersion(),
     baseUrl: base,
     facebook: {
-      ready: Boolean(base && pageAccessToken || (facebookAppId && appSecret && base)),
+      ready: Boolean(facebookAppId && appSecret && base),
       appId: facebookAppId || null,
       callbackUrl: base ? `${base}/api/admin/integrations/meta/facebook/callback` : null,
-      missing: [!pageAccessToken && !facebookAppId && "META_APP_ID", !pageAccessToken && !appSecret && "META_APP_SECRET/META_PAGE_ACCESS_TOKEN", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
+      missing: [!facebookAppId && "META_APP_ID", !appSecret && "META_APP_SECRET", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
     },
     instagram: {
       ready: Boolean(instagramAppId && instagramSecret && base),
       appId: instagramAppId || null,
       callbackUrl: base ? `${base}/api/admin/integrations/meta/instagram/callback` : null,
-      missing: [!instagramAppId && "META_INSTAGRAM_APP_ID/META_APP_ID", !instagramSecret && "META_INSTAGRAM_APP_SECRET/META_APP_SECRET", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
+      missing: [!instagramAppId && "META_INSTAGRAM_APP_ID", !instagramSecret && "META_INSTAGRAM_APP_SECRET", !base && "META_OAUTH_REDIRECT_BASE"].filter(Boolean),
     },
     whatsapp: {
       ready: Boolean(facebookAppId && appSecret && whatsappConfigId && base),
@@ -187,9 +186,9 @@ export async function subscribeFacebookPage(pageId: string, pageToken: string) {
 }
 
 export async function exchangeInstagramCode(code: string, redirectUri: string) {
-  const clientId = process.env.META_INSTAGRAM_APP_ID?.trim() || process.env.META_APP_ID?.trim();
-  const clientSecret = process.env.META_INSTAGRAM_APP_SECRET?.trim() || process.env.META_APP_SECRET?.trim();
-  if (!clientId || !clientSecret) throw new Error("Faltan las credenciales de Instagram/Meta");
+  const clientId = process.env.META_INSTAGRAM_APP_ID?.trim();
+  const clientSecret = process.env.META_INSTAGRAM_APP_SECRET?.trim();
+  if (!clientId || !clientSecret) throw new Error("Faltan META_INSTAGRAM_APP_ID o META_INSTAGRAM_APP_SECRET");
 
   const form = new URLSearchParams();
   form.set("client_id", clientId);
