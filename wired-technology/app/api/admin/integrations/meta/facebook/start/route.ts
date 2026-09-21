@@ -27,7 +27,13 @@ export async function GET(request: NextRequest) {
         throw new Error("Falta META_PAGE_ID y Meta no devolvió el ID de la página");
       }
 
-      await subscribeFacebookPage(pageId, pageToken);
+      // When using a Page token pasted from Meta's Messenger setup, the Page
+      // subscription is configured in Meta's UI. Calling /subscribed_apps here
+      // can require additional review-only Page access permissions, even though
+      // Messenger itself is already subscribed. Persist the token directly.
+      if (!configuredPageId) {
+        await subscribeFacebookPage(pageId, pageToken);
+      }
       await saveMetaConnection({
         channel: "MESSENGER",
         externalAccountId: pageId,
@@ -36,6 +42,7 @@ export async function GET(request: NextRequest) {
         scopes: ["pages_manage_metadata", "pages_messaging"],
         metadata: {
           webhookSubscribed: true,
+          webhookSubscriptionSource: configuredPageId ? "META_UI" : "GRAPH_API",
           source: configuredPageId ? "META_PAGE_ACCESS_TOKEN+META_PAGE_ID" : "META_PAGE_ACCESS_TOKEN",
         },
       });
