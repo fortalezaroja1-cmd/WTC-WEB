@@ -7,6 +7,57 @@ import { writeAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
+const CAP_STEPS = ["ENTRY","CONTACT","QUALIFY","DIAGNOSE","PROPOSE","FOLLOW_UP","DECISION","CLOSED"] as const;
+const ACTIVE_STAGES = new Set(["NEW","CONTACTED","QUOTED","NEGOTIATION"]);
+
+function capStageForStep(step: string) {
+  if (step === "CONTACT" || step === "QUALIFY") return "NEW";
+  if (step === "DIAGNOSE" || step === "PROPOSE") return "CONTACTED";
+  if (step === "FOLLOW_UP") return "QUOTED";
+  if (step === "DECISION") return "NEGOTIATION";
+  return "NEW";
+}
+
+function nextCapStep(step: string) {
+  const i = CAP_STEPS.indexOf(step as any);
+  if (i < 0 || i >= CAP_STEPS.length - 2) return step;
+  return CAP_STEPS[i + 1];
+}
+
+function parseJsonValue(value: any, fallback: any) {
+  if (value == null) return fallback;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(String(value)); } catch { return fallback; }
+}
+
+function missingForCap(step: string, item: any, quoteCount: number) {
+  const missing: string[] = [];
+  const answers = parseJsonValue(item.capAnswers, {});
+  const evidence = parseJsonValue(item.capEvidence, []);
+  if (!item.assignedSellerId) missing.push("responsable");
+  if (step === "ENTRY") {
+    if (!item.nextAction) missing.push("próxima acción");
+    if (!item.nextAt) missing.push("fecha de próxima acción");
+  }
+  if (step === "CONTACT") {
+    if (!Array.isArray(evidence) || evidence.length === 0) missing.push("evidencia de contacto");
+  }
+  if (step === "QUALIFY") {
+    for (const key of ["need","objective","problem","budget","urgency","decisionMaker"]) if (!String(answers?.[key] || "").trim()) missing.push(key);
+    if (!["QUALIFIES","NO_QUALIFIES","MISSING_INFO"].includes(String(item.qualificationDecision || ""))) missing.push("decisión de calificación");
+  }
+  if (step === "DIAGNOSE") {
+    if (!String(answers?.diagnosis || "").trim()) missing.push("diagnóstico");
+    if (!String(answers?.bottleneck || "").trim()) missing.push("cuello de botella");
+  }
+  if (step === "PROPOSE" && quoteCount < 1) missing.push("cotización");
+  if (step === "FOLLOW_UP") {
+    if (!item.nextAction) missing.push("próxima acción");
+    if (!item.nextAt) missing.push("fecha de próxima acción");
+  }
+  return missing;
+}
+
 function stageToLead(stage: string) {
   if (stage === "WON") return "CLOSED";
   if (stage === "LOST") return "LOST";
@@ -107,11 +158,11 @@ export async function POST(req: NextRequest) {
       Number(body?.value || 0),
       stage,
       String(body?.source || "MANUAL"),
-      body?.assignedSellerId || null,
-      body?.assignedSellerName || null,
+      body?.assignedSellerId || session.userId,
+      body?.assignedSellerName || session.name,
       ["LOW","MEDIUM","HIGH"].includes(String(body?.priority || "")) ? String(body.priority) : "MEDIUM",
-      body?.nextAction || null,
-      body?.nextAt ? new Date(body.nextAt) : null,
+      body?.nextAction || "Realizar contacto inicial",
+      body?.nextAt ? new Date(body.nextAt) : new Date(Date.now() + 60 * 60 * 1000),
       body?.notes || null,
     );
     await addSalesActivity({ opportunityId: id, type: "CREATED", text: "Oportunidad creada", actorUserId: session.userId, actorName: session.name });
@@ -136,50 +187,102 @@ export async function PUT(req: NextRequest) {
     const current = currentRows[0];
     if (!current) return NextResponse.json({ error: "Oportunidad no encontrada" }, { status: 404 });
 
-    const allowed = ["customerName","phone","email","city","address","title","value","stage","source","assignedSellerId","assignedSellerName","priority","nextAction","nextAt","lossReason","notes"];
+    let bodyForUpdate = { ...body };
+    if (body?.advanceCap) {
+      const quoteRows = await prisma.$queryRawUnsafe<any[]>(`SELECT COUNT(*)::int AS count FROM "Quote" WHERE "opportunityId"=$1`, id);
+      const merged = {
+        ...current,
+        ...body,
+        capAnswers: body.capAnswers !== undefined ? body.capAnswers : current.capAnswers,
+        capEvidence: body.capEvidence !== undefined ? body.capEvidence : current.capEvidence,
+      };
+      const step = String(current.capStep || "ENTRY");
+      const missing = missingForCap(step, merged, Number(quoteRows[0]?.count || 0));
+      if (missing.length) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Opportunity" SET "capMissingFields"=$2::jsonb,"capBlockedReason"=$3,"updatedAt"=NOW() WHERE "id"=$1`,
+          id, JSON.stringify(missing), `Falta completar: ${missing.join(", ")}`
+        );
+        return NextResponse.json({ error: `NO LISTO · Falta: ${missing.join(", ")}`, missing }, { status: 409 });
+      }
+      const next = nextCapStep(step);
+      bodyForUpdate = {
+        ...bodyForUpdate,
+        capStep: next,
+        capSequence: Number(current.capSequence || 1) + 1,
+        capMissingFields: [],
+        capBlockedReason: null,
+        stage: capStageForStep(next),
+      };
+    }
+
+    if (body?.stage && body.stage !== current.stage && !body?.advanceCap && !["WON","LOST"].includes(String(body.stage))) {
+      return NextResponse.json({ error: "La etapa comercial se mueve completando CAP, no manualmente." }, { status: 409 });
+    }
+    if (body?.stage === "LOST" && !String(body?.lossReason || current.lossReason || "").trim()) {
+      return NextResponse.json({ error: "Para cerrar como perdido debes registrar el motivo." }, { status: 409 });
+    }
+    if (body?.stage === "WON") {
+      const quoteRows = await prisma.$queryRawUnsafe<any[]>(`SELECT COUNT(*)::int AS count FROM "Quote" WHERE "opportunityId"=$1`, id);
+      if (Number(quoteRows[0]?.count || 0) < 1) return NextResponse.json({ error: "Para cerrar como ganado debe existir al menos una cotización." }, { status: 409 });
+      if (!current.assignedSellerId && !body?.assignedSellerId) return NextResponse.json({ error: "Asigna un responsable antes de cerrar." }, { status: 409 });
+      bodyForUpdate.capStep = "CLOSED";
+      bodyForUpdate.capCompletedAt = new Date();
+      bodyForUpdate.capDecision = "WON";
+    }
+    if (body?.stage === "LOST") {
+      bodyForUpdate.capStep = "CLOSED";
+      bodyForUpdate.capCompletedAt = new Date();
+      bodyForUpdate.capDecision = "LOST";
+    }
+
+    const allowed = ["customerName","phone","email","city","address","title","value","stage","source","assignedSellerId","assignedSellerName","priority","nextAction","nextAt","lossReason","notes","capStep","capDecision","capLabel","capSequence","capAnswers","capEvidence","capMissingFields","capBlockedReason","capCompletedAt","qualificationDecision"];
     const sets: string[] = [];
     const values: any[] = [id];
     for (const key of allowed) {
-      if (body[key] === undefined) continue;
-      let value: any = body[key] === "" ? null : body[key];
+      if (bodyForUpdate[key] === undefined) continue;
+      let value: any = bodyForUpdate[key] === "" ? null : bodyForUpdate[key];
       if (key === "stage") {
         if (!OPPORTUNITY_STAGES.includes(String(value) as any)) return NextResponse.json({ error: "Etapa inválida" }, { status: 400 });
       }
+      if (key === "capStep" && !CAP_STEPS.includes(String(value) as any)) return NextResponse.json({ error: "Paso CAP inválido" }, { status: 400 });
       if (key === "value") value = Number(value || 0);
       if (key === "nextAt") value = value ? new Date(value) : null;
+      const jsonKey = ["capAnswers","capEvidence","capMissingFields"].includes(key);
+      if (jsonKey) value = JSON.stringify(value ?? (key === "capAnswers" ? {} : []));
       values.push(value);
-      sets.push(`"${key}"=$${values.length}`);
+      sets.push(jsonKey ? `"${key}"=${values.length}::jsonb` : `"${key}"=${values.length}`);
     }
     if (!sets.length) return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
 
-    const nextStage = body.stage ? String(body.stage) : current.stage;
-    if (body.stage === "WON") sets.push(`"wonAt"=COALESCE("wonAt",NOW()), "lostAt"=NULL`);
-    if (body.stage === "LOST") sets.push(`"lostAt"=COALESCE("lostAt",NOW()), "wonAt"=NULL`);
-    if (body.stage && !["WON","LOST"].includes(String(body.stage))) sets.push(`"wonAt"=NULL, "lostAt"=NULL`);
+    const nextStage = bodyForUpdate.stage ? String(bodyForUpdate.stage) : current.stage;
+    if (bodyForUpdate.stage === "WON") sets.push(`"wonAt"=COALESCE("wonAt",NOW()), "lostAt"=NULL`);
+    if (bodyForUpdate.stage === "LOST") sets.push(`"lostAt"=COALESCE("lostAt",NOW()), "wonAt"=NULL`);
+    if (bodyForUpdate.stage && !["WON","LOST"].includes(String(bodyForUpdate.stage))) sets.push(`"wonAt"=NULL, "lostAt"=NULL`);
     sets.push(`"updatedAt"=NOW()`);
 
     await prisma.$executeRawUnsafe(`UPDATE "Opportunity" SET ${sets.join(",")} WHERE "id"=$1`, ...values);
 
-    if (body.stage && current.stage !== body.stage && current.leadId) {
-      await prisma.$executeRawUnsafe(`UPDATE "Lead" SET "status"=$2,"updatedAt"=NOW() WHERE "id"=$1`, current.leadId, stageToLead(String(body.stage)));
+    if (bodyForUpdate.stage && current.stage !== bodyForUpdate.stage && current.leadId) {
+      await prisma.$executeRawUnsafe(`UPDATE "Lead" SET "status"=$2,"updatedAt"=NOW() WHERE "id"=$1`, current.leadId, stageToLead(String(bodyForUpdate.stage)));
     }
 
     const changes: string[] = [];
-    if (body.stage && body.stage !== current.stage) changes.push(`Etapa: ${current.stage} → ${body.stage}`);
+    if (bodyForUpdate.stage && bodyForUpdate.stage !== current.stage) changes.push(`Etapa: ${current.stage} → ${bodyForUpdate.stage}`);
     if (body.assignedSellerName !== undefined && body.assignedSellerName !== current.assignedSellerName) changes.push(`Responsable: ${body.assignedSellerName || "Sin asignar"}`);
     if (body.value !== undefined && Number(body.value) !== Number(current.value)) changes.push(`Valor actualizado`);
     if (body.nextAction !== undefined || body.nextAt !== undefined) changes.push(`Seguimiento actualizado`);
     if (body.notes !== undefined) changes.push("Notas actualizadas");
     await addSalesActivity({
       opportunityId: id,
-      type: body.stage && body.stage !== current.stage ? "STAGE_CHANGED" : "UPDATED",
+      type: bodyForUpdate.stage && bodyForUpdate.stage !== current.stage ? "STAGE_CHANGED" : "UPDATED",
       text: changes.join(" · ") || "Oportunidad actualizada",
       actorUserId: session.userId,
       actorName: session.name,
       meta: { stage: nextStage },
     });
 
-    if (body.stage === "WON" && current.stage !== "WON") {
+    if (bodyForUpdate.stage === "WON" && current.stage !== "WON") {
       await prisma.notification.create({ data: { type: "opportunity_won", message: `Venta ganada: ${current.customerName || current.title}` } });
     }
     await writeAudit({ actorUserId: session.userId, actorName: session.name, action: "OPPORTUNITY_UPDATED", meta: { opportunityId: id, changes, stage: nextStage } });
