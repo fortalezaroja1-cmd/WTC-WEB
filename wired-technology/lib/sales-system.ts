@@ -52,6 +52,16 @@ export async function ensureSalesTables() {
         )
       `);
       await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "address" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capStep" TEXT NOT NULL DEFAULT 'ENTRY'`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capDecision" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capLabel" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capSequence" INTEGER NOT NULL DEFAULT 1`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capAnswers" JSONB NOT NULL DEFAULT '{}'::jsonb`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capEvidence" JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capMissingFields" JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capBlockedReason" TEXT`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "capCompletedAt" TIMESTAMP(3)`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "Opportunity" ADD COLUMN IF NOT EXISTS "qualificationDecision" TEXT`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_stage_idx" ON "Opportunity"("stage")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_assigned_idx" ON "Opportunity"("assignedSellerId")`);
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Opportunity_nextAt_idx" ON "Opportunity"("nextAt")`);
