@@ -106,7 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </div>
       <nav className="flex-1 p-2.5 overflow-y-auto overscroll-contain">
-        {NAV.filter((item) => can(item.permission) && (!("adminOnly" in item) || !item.adminOnly || session?.role === "ADMIN")).map(({ href, label, icon: Icon }) => {
+        {(session?.role === "SALES" ? NAV.filter((item) => item.href === "/admin/trabajo") : NAV.filter((item) => can(item.permission) && (!("adminOnly" in item) || !item.adminOnly || session?.role === "ADMIN"))).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
           const badge = href === "/admin/pedidos" ? counts.newOrders : href === "/admin/crm" ? counts.newOpportunities : href === "/admin/inbox" ? counts.unreadConversations : href === "/admin/notificaciones" ? counts.notifications : 0;
           return (
@@ -119,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         })}
       </nav>
       <div className="p-2.5 border-t border-slate-dark">
-        <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] hover:bg-slate-dark/50 transition-colors"><Store size={17} /> Ver tienda</Link>
+        {session?.role !== "SALES" && <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] hover:bg-slate-dark/50 transition-colors"><Store size={17} /> Ver tienda</Link>}
         <button onClick={logout} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13.5px] hover:bg-slate-dark/50 transition-colors text-left"><LogOut size={17} /> Cerrar sesión</button>
       </div>
     </>
