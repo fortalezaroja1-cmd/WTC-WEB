@@ -4,6 +4,7 @@ import { Permission, resolvePermissions } from "@/lib/permissions";
 const TOKEN_NAME = "wt_admin_token";
 
 const LANDING: Array<[Permission, string]> = [
+  ["crm.view", "/admin/trabajo"],
   ["dashboard.view", "/admin"],
   ["inbox.view", "/admin/inbox"],
   ["crm.view", "/admin/crm"],
@@ -99,6 +100,12 @@ function forbidden(request: NextRequest, apiRequest: boolean, role: string, perm
   return NextResponse.redirect(new URL(destination, request.url));
 }
 
+function isSalesAllowedPath(pathname: string) {
+  return pathname === "/admin/trabajo"
+    || pathname.startsWith("/api/admin/work-queue")
+    || pathname.startsWith("/api/admin/session");
+}
+
 function requiredPermission(pathname: string, method: string): Permission | null {
   if (pathname.startsWith("/admin/usuarios")) return "users.manage";
   if (pathname.startsWith("/admin/actividad")) return "dashboard.view";
@@ -156,13 +163,19 @@ export async function middleware(request: NextRequest) {
     const payload = await validateAdminToken(token);
     if (!payload) return unauthorized(request, isAdminApi);
 
-    const permission = requiredPermission(pathname, request.method);
-    if (permission) {
-      const role = String(payload.role || "SALES");
-      const permissions = resolvePermissions(role, payload.permissions);
-      if (role !== "ADMIN" && !permissions.includes(permission)) {
-        return forbidden(request, isAdminApi, role, permissions);
+    const role = String(payload.role || "SALES");
+    const permissions = resolvePermissions(role, payload.permissions);
+
+    if (role === "SALES" && !isSalesAllowedPath(pathname)) {
+      if (isAdminApi) {
+        return NextResponse.json({ error: "El perfil de ventas solo puede operar desde Próxima tarea" }, { status: 403 });
       }
+      return NextResponse.redirect(new URL("/admin/trabajo", request.url));
+    }
+
+    const permission = requiredPermission(pathname, request.method);
+    if (permission && role !== "ADMIN" && !permissions.includes(permission)) {
+      return forbidden(request, isAdminApi, role, permissions);
     }
   }
 
