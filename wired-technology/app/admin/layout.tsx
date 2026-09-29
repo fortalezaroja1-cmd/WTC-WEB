@@ -4,13 +4,14 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import WiredAssistant from "@/components/WiredAssistant";
 import AdminGlobalSearch from "@/components/AdminGlobalSearch";
-import { Activity, LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck } from "lucide-react";
+import { Activity, LayoutDashboard, Boxes, ClipboardList, Package, Users, Settings, Store, LogOut, BellRing, Bot, Menu, X, ShieldCheck, Play } from "lucide-react";
 
 const NAV = [
+  { href: "/admin/trabajo", label: "Próxima tarea", icon: Play, permission: "crm.view" },
   { href: "/admin", label: "Panel", icon: LayoutDashboard, permission: "dashboard.view" },
   { href: "/admin/notificaciones", label: "Notificaciones", icon: BellRing, permission: "dashboard.view" },
   { href: "/admin/actividad", label: "Actividad", icon: Activity, permission: "dashboard.view" },
-  { href: "/admin/inbox", label: "Bandeja", icon: BellRing, permission: "inbox.view" },
+  { href: "/admin/inbox", label: "Conversaciones", icon: BellRing, permission: "inbox.view", adminOnly: true },
   { href: "/admin/crm", label: "CRM", icon: LayoutDashboard, permission: "crm.view" },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: ClipboardList, permission: "crm.view" },
   { href: "/admin/agente", label: "Probar agente", icon: Bot, permission: "agent.use" },
@@ -105,7 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
       </div>
       <nav className="flex-1 p-2.5 overflow-y-auto overscroll-contain">
-        {NAV.filter((item) => can(item.permission)).map(({ href, label, icon: Icon }) => {
+        {NAV.filter((item) => can(item.permission) && (!("adminOnly" in item) || !item.adminOnly || session?.role === "ADMIN")).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
           const badge = href === "/admin/pedidos" ? counts.newOrders : href === "/admin/crm" ? counts.newOpportunities : href === "/admin/inbox" ? counts.unreadConversations : href === "/admin/notificaciones" ? counts.notifications : 0;
           return (
