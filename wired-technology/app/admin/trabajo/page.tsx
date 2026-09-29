@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, Clock3, MessageCircle, Phone, Play, RefreshCcw, UserRound } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, MessageCircle, Phone, Play, RefreshCcw, UserRound } from "lucide-react";
 
 const CAP_LABELS:Record<string,string>={ENTRY:"Entrada",CONTACT:"Contacto inicial",QUALIFY:"Calificación",DIAGNOSE:"Diagnóstico",PROPOSE:"Propuesta",FOLLOW_UP:"Seguimiento",DECISION:"Decisión",CLOSED:"Cerrado"};
 
@@ -134,7 +133,7 @@ export default function TrabajoPage(){
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5">
               {current.phone&&<a href={phoneHref(current.phone)} className="border border-hair rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"><Phone size={15}/>Llamar</a>}
               {current.phone&&<a href={waHref(current.phone)} target="_blank" rel="noreferrer" className="border border-hair rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"><MessageCircle size={15}/>WhatsApp</a>}
-              <Link href={"/admin/crm?opportunityId="+current.id} className="bg-graphite text-white rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2">Gestionar CAP <ArrowRight size={15}/></Link>
+              <button type="button" disabled className="bg-graphite/40 text-white rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 cursor-not-allowed">Gestión guiada aquí</button>
             </div>
           </div>
 
