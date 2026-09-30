@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/site-url";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     id:randomUUID(), email, name, role, permissions:selected, tokenHash,
     createdByUserId:session.userId, createdByName:session.name, expiresAt
   }});
-  const url = new URL("/registro/invitacion", request.nextUrl.origin);
+  const url = new URL("/registro/invitacion", siteUrl());
   url.searchParams.set("token", token);
   return NextResponse.json({ id:invite.id, inviteUrl:url.toString(), expiresAt }, { status:201 });
 }

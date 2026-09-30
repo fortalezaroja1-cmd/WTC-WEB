@@ -1,7 +1,9 @@
+import { siteUrl } from "@/lib/site-url";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: "Wired Technology · Materiales eléctricos e iluminación",
   description: "Cables Centelsa, iluminación LED y accesorios Mercury. Envío a toda Colombia.",
 };

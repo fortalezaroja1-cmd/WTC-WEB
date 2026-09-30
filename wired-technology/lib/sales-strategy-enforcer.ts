@@ -1,3 +1,4 @@
+import { normalizePublicUrl, siteUrl } from "@/lib/site-url";
 import { prisma } from "@/lib/db";
 import type { AgentDecision, SalesAgentState } from "@/lib/sales-agent-core";
 
@@ -75,12 +76,10 @@ async function selfServiceUrl() {
     try {
       const parsed = JSON.parse(row.value);
       const configured = String(parsed?.selfServiceUrl || "").trim();
-      if (configured) return /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
+      if (configured) return normalizePublicUrl(configured) || siteUrl();
     } catch {}
   }
-  const raw = String(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim();
-  if (!raw) return "";
-  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return siteUrl();
 }
 
 function detectAgreement(text: string) {

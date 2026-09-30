@@ -1,3 +1,4 @@
+import { normalizePublicUrl, siteUrl } from "@/lib/site-url";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { saveOutboundWhatsAppMessage } from "@/lib/crm";
@@ -25,19 +26,11 @@ const DEFAULT_CONFIG: AwayMessageConfig = {
 };
 
 function normalizeUrl(value: string) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
+  return normalizePublicUrl(value);
 }
 
 function getDefaultSelfServiceUrl() {
-  return normalizeUrl(
-    process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.SITE_URL ||
-      process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-      ""
-  );
+  return siteUrl();
 }
 
 function parseAwayConfig(raw: string | null | undefined): AwayMessageConfig {

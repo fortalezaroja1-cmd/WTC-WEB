@@ -123,7 +123,7 @@ prisma/
 3. Agrega las variables de entorno de `.env.local`
 4. Deploy
 
-Tu tienda quedará en: `https://wired-technology.vercel.app`
+Tu tienda quedará en: `https://www.wtgy.online`
 
 ## Mercado Pago
 
@@ -135,3 +135,22 @@ Para activar pagos:
 ---
 
 **Catálogo incluido:** 13 productos reales con variantes (calibres, potencias, amperajes), organizado en 3 categorías y 13 subcategorías.
+
+
+## Dominio de producción
+
+Origen público: `https://www.wtgy.online`. Configurar en Vercel:
+
+- `NEXT_PUBLIC_SITE_URL=https://www.wtgy.online`
+- `SITE_URL=https://www.wtgy.online`
+- `META_OAUTH_REDIRECT_BASE=https://www.wtgy.online`
+
+En Meta, registrar las URLs reales (el código no cambia la configuración de Meta):
+
+- Facebook OAuth: `https://www.wtgy.online/api/admin/integrations/meta/facebook/callback`
+- Instagram OAuth: `https://www.wtgy.online/api/admin/integrations/meta/instagram/callback`
+- Webhook: `https://www.wtgy.online/api/meta/webhook`
+- Privacidad: `https://www.wtgy.online/privacidad`
+- Eliminación de datos: `https://www.wtgy.online/eliminacion-de-datos`
+
+Actualizar también cualquier URL anterior guardada en el panel de automatizaciones. No retirar la dirección anterior hasta actualizar y probar los webhooks y OAuth.

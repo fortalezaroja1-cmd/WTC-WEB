@@ -1,3 +1,4 @@
+import { normalizePublicUrl, siteUrl } from "@/lib/site-url";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 
@@ -22,18 +23,8 @@ export function metaGraphVersion() {
   return process.env.META_GRAPH_VERSION || "v26.0";
 }
 
-export function publicBaseUrl(fallbackOrigin?: string) {
-  const configured = String(
-    process.env.META_OAUTH_REDIRECT_BASE ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.SITE_URL ||
-      process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-      fallbackOrigin ||
-      ""
-  ).trim();
-  if (!configured) return "";
-  const url = /^https?:\/\//i.test(configured) ? configured : `https://${configured}`;
-  return url.replace(/\/$/, "");
+export function publicBaseUrl(_fallbackOrigin?: string) {
+  return normalizePublicUrl(process.env.META_OAUTH_REDIRECT_BASE) || siteUrl();
 }
 
 export function metaEnvStatus(origin?: string) {
