@@ -1,7 +1,9 @@
 "use client";
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { X, Plus, Minus, Trash2, ShoppingCart, ChevronRight } from "lucide-react";
-import { formatCOP } from "@/lib/utils";
+import Link from "next/link";
+import { X, Plus, Minus, Trash2, ShoppingCart, MessageCircle } from "lucide-react";
+import { formatCOP, waLink } from "@/lib/utils";
+import { trackMetaEvent } from "@/lib/meta-events";
 
 export interface CartItem {
   productId: string;
@@ -31,7 +33,7 @@ export function useCart() {
   return c;
 }
 
-export function CartProvider({ children }: { children: ReactNode }) {
+export function CartProvider({ children, whatsapp }: { children: ReactNode; whatsapp: string }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -41,7 +43,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem("wt_cart");
       if (saved) setItems(JSON.parse(saved));
 
-      // Conserva el origen aunque el cliente navegue por varias páginas antes de enviar el pedido.
       const params = new URLSearchParams(window.location.search);
       const source = params.get("origen") || params.get("utm_source");
       if (source) localStorage.setItem("wt_order_origin", source.slice(0, 80));
@@ -76,14 +77,64 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ items, addItem, removeItem, updateQty, clearCart, open, setOpen }}>
       {children}
-      {open && <CartDrawer />}
+      {open && <CartDrawer whatsapp={whatsapp} />}
     </Ctx.Provider>
   );
 }
 
-function CartDrawer() {
+function CartDrawer({ whatsapp }: { whatsapp: string }) {
   const { items, removeItem, updateQty, setOpen } = useCart();
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+
+  const orderMessage = (() => {
+    let origin = "Web";
+    if (typeof window !== "undefined") {
+      try {
+        origin = localStorage.getItem("wt_order_origin") || "Web";
+      } catch {}
+    }
+
+    const lines = [
+      "Hola Wired Technology, quiero realizar este pedido:",
+      "",
+      ...items.flatMap((item, index) => [
+        `${index + 1}. ${item.name}`,
+        `SKU: ${item.sku}`,
+        `Cantidad: ${item.qty}`,
+        `Precio unitario: ${formatCOP(item.price)}`,
+        `Subtotal: ${formatCOP(item.price * item.qty)}`,
+        "",
+      ]),
+      `Total productos: ${formatCOP(subtotal)}`,
+      "Envío: por cotizar",
+      "",
+      "Nombre:",
+      "Ciudad:",
+      "Dirección:",
+      "",
+      `Origen: ${origin}`,
+      "",
+      "¿Me confirman disponibilidad y valor del envío?",
+    ];
+
+    return lines.join("\n");
+  })();
+
+  const handleWhatsAppOrder = () => {
+    trackMetaEvent("InitiateCheckout", {
+      content_ids: items.map((item) => item.sku),
+      content_type: "product",
+      num_items: items.reduce((sum, item) => sum + item.qty, 0),
+      value: subtotal,
+      currency: "COP",
+    });
+    trackMetaEvent("Contact", {
+      content_ids: items.map((item) => item.sku),
+      content_type: "product",
+      value: subtotal,
+      currency: "COP",
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex justify-end" onClick={() => setOpen(false)}>
@@ -132,11 +183,25 @@ function CartDrawer() {
             <div className="flex justify-between text-sm mb-1">
               <span className="text-muted">Envío</span><span className="font-semibold text-copper">Por cotizar</span>
             </div>
-            <p className="text-[10px] text-muted mt-2">El valor final se confirma después de cotizar el envío.</p>
-            <a href="/checkout"
-              className="mt-3 w-full bg-copper text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-copper-bright transition-colors">
-              Enviar pedido <ChevronRight size={16} />
+            <p className="text-[10px] text-muted mt-2">WhatsApp abrirá con el pedido completo ya diligenciado.</p>
+
+            <a
+              href={waLink(whatsapp, orderMessage)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={handleWhatsAppOrder}
+              className="mt-3 w-full bg-green text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+            >
+              <MessageCircle size={17} /> Enviar pedido por WhatsApp
             </a>
+
+            <Link
+              href="/checkout"
+              onClick={() => setOpen(false)}
+              className="mt-2 w-full border border-hair text-slate-dark font-semibold py-2.5 rounded-lg flex items-center justify-center text-sm hover:border-copper transition-colors"
+            >
+              Completar datos de entrega
+            </Link>
           </div>
         )}
       </div>
