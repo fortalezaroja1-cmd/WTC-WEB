@@ -16,7 +16,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
   const cfg: Record<string, string> = {};
   settings.forEach((s) => (cfg[s.key] = s.value));
 
-  const whatsapp = cfg.whatsapp || "573143506623";
+  const whatsapp = "573143506623";
   const waUrl = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Hola Wired Technology, tengo una consulta")}`;
 
   return (
