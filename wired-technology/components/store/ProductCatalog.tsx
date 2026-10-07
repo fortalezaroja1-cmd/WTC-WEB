@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
+import { trackMetaEvent } from "@/lib/meta-events";
 
 export interface CatalogProduct {
   id: string;
@@ -100,6 +101,14 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
       qty: 1,
       image: product.image,
       slug: product.slug,
+    });
+    trackMetaEvent("AddToCart", {
+      content_ids: [product.sku],
+      content_type: "product",
+      content_name: product.name,
+      value: product.price,
+      currency: "COP",
+      num_items: 1,
     });
   };
 
