@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AddToCart } from "@/components/store/AddToCart";
 import { ProductGallery } from "@/components/store/ProductGallery";
+import { ProductViewTracker } from "@/components/store/ProductViewTracker";
 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -28,8 +29,13 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
   const whatsapp = cfg.whatsapp || "573000000000";
 
   const mainImage = product.images[0]?.url || null;
+  const viewPrice = product.variants.length > 0
+    ? Math.min(...product.variants.map((v) => Number(v.price)))
+    : Number(product.price) || 0;
 
   return (
+    <>
+      <ProductViewTracker sku={product.sku} name={product.name} value={viewPrice} />
     <div className="max-w-[1240px] mx-auto px-5 py-7">
       <Link href={`/categorias/${product.category.slug}`}
         className="font-mono text-xs text-copper font-semibold inline-flex items-center gap-1 mb-4 hover:underline">
@@ -85,5 +91,6 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
     </div>
+    </>
   );
 }
