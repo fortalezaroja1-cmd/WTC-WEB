@@ -144,22 +144,9 @@ export function StoreHeader({
               </button>
             </div>
 
-            <div className="p-4 border-b border-hair bg-[#FAFAFA]">
-              <Link
-                href="/admin/login"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl bg-copper text-white px-4 py-3.5 shadow-sm"
-              >
-                <div className="h-10 w-10 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                  <ShieldCheck size={20} />
-                </div>
-                <div>
-                  <div className="text-sm font-bold">Administrar catálogo</div>
-                  <div className="text-[11px] text-white/80 mt-0.5">
-                    Productos, inventario y pedidos
-                  </div>
-                </div>
-              </Link>
+            <div className="px-4 pt-5 pb-3">
+              <p className="font-bold text-lg">¿Qué necesitas comprar?</p>
+              <p className="text-sm text-muted mt-1">Elige una categoría o busca por nombre.</p>
             </div>
 
             <div className="px-4 pt-4 pb-2 text-[10px] uppercase tracking-[.14em] font-mono text-muted">
@@ -179,6 +166,10 @@ export function StoreHeader({
                 <ChevronRight size={16} className="text-muted" />
               </Link>
             ))}
+            <Link href="/admin/login" onClick={() => setMenuOpen(false)}
+              className="block text-xs text-muted underline px-4 py-5 mt-6">
+              Acceso para administradores
+            </Link>
           </div>
         </div>
       )}
