@@ -47,14 +47,14 @@ export function StoreHeader({
         <div className="max-w-[1180px] mx-auto px-4 sm:px-5 flex items-center gap-3 sm:gap-4 h-[66px]">
           <button
             onClick={() => setMenuOpen(true)}
-            className="text-white p-1 md:hidden"
+            className="text-white min-w-11 min-h-11 flex items-center justify-center rounded-lg md:hidden"
             aria-label="Abrir menú"
           >
             <Menu size={22} />
           </button>
 
           <Link href="/" className="shrink-0 min-w-0">
-            <div className="font-display font-bold text-white text-base sm:text-lg tracking-tight whitespace-nowrap">
+            <div className="font-display font-bold text-white text-[14px] min-[380px]:text-base sm:text-lg tracking-tight whitespace-nowrap">
               WIRED<span className="text-copper">·</span>TECHNOLOGY
             </div>
             <div className="font-mono text-[9.5px] tracking-[.14em] uppercase text-muted hidden sm:block">
@@ -90,16 +90,16 @@ export function StoreHeader({
               href="/admin/login"
               aria-label="Administrar catálogo"
               title="Administrar catálogo"
-              className="md:hidden h-10 w-10 rounded-lg border border-copper bg-copper/15 text-copper flex items-center justify-center shadow-sm"
+              className="hidden"
             >
               <ShieldCheck size={19} />
             </Link>
 
             <button
               onClick={() => setOpen(true)}
-              className="relative bg-copper text-white rounded-lg px-3.5 py-2.5 hover:bg-copper-bright transition-colors"
+              className="relative bg-copper text-white rounded-lg min-h-11 px-3 py-2 flex items-center gap-2 hover:bg-copper-bright transition-colors" aria-label={`Abrir mi pedido, ${count} productos`}
             >
-              <ShoppingCart size={18} />
+              <ShoppingCart size={20} /><span className="hidden min-[390px]:inline text-sm font-semibold">Pedido</span>
               {count > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-amber text-graphite text-[11px] font-bold rounded-full min-w-[19px] h-[19px] flex items-center justify-center px-1">
                   {count}
@@ -108,6 +108,19 @@ export function StoreHeader({
             </button>
           </div>
         </div>
+
+        <form onSubmit={handleSearch} role="search" className="sm:hidden px-4 pb-3">
+          <label htmlFor="mobile-product-search" className="sr-only">Buscar productos por nombre o referencia</label>
+          <div className="flex gap-2">
+            <div className="flex items-center gap-2 flex-1 bg-white rounded-xl px-3 border-2 border-white focus-within:border-copper min-w-0">
+              <Search size={20} className="text-graphite shrink-0" aria-hidden="true" />
+              <input id="mobile-product-search" value={query} onChange={event => setQuery(event.target.value)}
+                type="search" placeholder="¿Qué producto necesitas?"
+                className="w-full min-w-0 h-12 text-base text-ink placeholder:text-muted outline-none" />
+            </div>
+            <button type="submit" className="min-h-12 px-4 bg-copper text-white font-semibold rounded-xl">Buscar</button>
+          </div>
+        </form>
         <div className="livewire" />
       </header>
 
@@ -118,7 +131,7 @@ export function StoreHeader({
           onClick={() => setMenuOpen(false)}
         >
           <div
-            className="w-[310px] max-w-[88vw] bg-white h-full overflow-y-auto"
+            className="w-[340px] max-w-[90vw] bg-white h-full overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-hair">
@@ -152,12 +165,15 @@ export function StoreHeader({
             <div className="px-4 pt-4 pb-2 text-[10px] uppercase tracking-[.14em] font-mono text-muted">
               Categorías
             </div>
+            <Link href="/productos" onClick={() => setMenuOpen(false)} className="flex items-center justify-between px-4 min-h-14 py-3.5 border-b border-hair text-copper font-bold">
+              Ver todos los productos <ChevronRight size={18} />
+            </Link>
             {categories.map((c) => (
               <Link
                 key={c.id}
                 href={`/categorias/${c.slug}`}
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-between px-4 py-3.5 border-b border-hair hover:bg-paper transition-colors"
+                className="flex items-center justify-between px-4 min-h-14 py-3.5 border-b border-hair hover:bg-paper transition-colors"
               >
                 <span className="font-semibold text-sm">{c.name}</span>
                 <ChevronRight size={16} className="text-muted" />
