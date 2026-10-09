@@ -25,25 +25,25 @@ export default async function HomePage() {
     <>
       {/* Hero */}
       <section className="bg-graphite text-white relative overflow-hidden">
-        <div className="max-w-[1180px] mx-auto px-5 py-16 relative z-10">
+        <div className="max-w-[1180px] mx-auto px-5 py-9 sm:py-16 relative z-10">
           <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold mb-3">
             Distribuidor Centelsa · Mercury
           </div>
-          <h1 className="font-display text-4xl md:text-[46px] font-bold leading-[1.05] tracking-tight max-w-[660px]">
-            El material eléctrico correcto, <span className="text-copper">calibre por calibre.</span>
+          <h1 className="font-display text-[30px] sm:text-4xl md:text-[46px] font-bold leading-[1.15] tracking-tight max-w-[660px]">
+            Encuentra tus productos eléctricos <span className="text-copper">sin complicaciones.</span>
           </h1>
           <p className="text-base text-muted mt-4 max-w-[520px]">
-            Cables, iluminación LED y accesorios con especificaciones claras, inventario real y envío a toda Colombia.
+            Cables, iluminación y accesorios. Elige tus productos, arma tu pedido y confírmalo fácilmente por WhatsApp.
           </p>
-          <div className="flex gap-3 mt-7">
-            <Link href="/categorias/cables" className="bg-copper text-white font-semibold px-5 py-3 rounded-lg inline-flex items-center gap-2 hover:bg-copper-bright transition-colors">
-              Ver cables Centelsa <ChevronRight size={16} />
+          <div className="flex flex-col sm:flex-row gap-3 mt-7">
+            <Link href="/productos" className="min-h-14 bg-copper text-white font-bold text-base px-5 py-3 rounded-xl inline-flex items-center justify-center gap-2 hover:bg-copper-bright transition-colors">
+              Ver todos los productos <ChevronRight size={19} />
             </Link>
-            <Link href="/categorias/iluminacion" className="border border-slate-dark text-white font-semibold px-5 py-3 rounded-lg inline-flex items-center gap-2 hover:border-copper transition-colors">
-              Iluminación LED
+            <Link href="/categorias/cables" className="min-h-14 border border-slate-dark text-white font-semibold text-base px-5 py-3 rounded-xl inline-flex items-center justify-center gap-2 hover:border-copper transition-colors">
+              Buscar cables
             </Link>
           </div>
-          <div className="flex gap-7 mt-9">
+          <div className="flex flex-wrap gap-x-6 gap-y-4 mt-8">
             {[
               [Truck, "Envío gratis", `Desde ${formatCOP(freeShipFrom)}`],
               [ShieldCheck, "Pago seguro", "Mercado Pago"],
@@ -54,7 +54,7 @@ export default async function HomePage() {
                 <Icon size={20} className="text-copper" />
                 <div>
                   <div className="font-semibold text-sm">{title as string}</div>
-                  <div className="font-mono text-[11px] text-muted">{sub as string}</div>
+                  <div className="text-xs text-muted">{sub as string}</div>
                 </div>
               </div>
             ))}
@@ -70,9 +70,9 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           {categories.map((c) => (
             <Link key={c.id} href={`/categorias/${c.slug}`}
-              className="bg-card border border-hair rounded-xl p-5 hover:shadow-md transition-shadow">
-              <div className="font-display font-semibold text-base">{c.name}</div>
-              <div className="font-mono text-[11.5px] text-muted mt-1">
+              className="bg-card border border-hair rounded-xl p-5 min-h-24 flex flex-col justify-center hover:shadow-md transition-shadow">
+              <div className="font-display font-semibold text-lg">{c.name}</div>
+              <div className="text-sm text-muted mt-1">
                 {c.subcategories.slice(0, 3).map((s) => s.name).join(" · ")}
               </div>
             </Link>
@@ -83,7 +83,7 @@ export default async function HomePage() {
       {/* Destacados */}
       <section className="max-w-[1180px] mx-auto px-5 pt-8 pb-4">
         <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold flex items-center gap-1.5">
-          <Star size={11} /> Más vendidos
+          <Star size={16} /> Productos destacados
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mt-4">
           {featuredProducts.map((p) => {
