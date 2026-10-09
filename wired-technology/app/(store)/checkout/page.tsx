@@ -1,162 +1,155 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useCart } from "@/components/store/CartProvider";
-import { formatCOP } from "@/lib/utils";
-import { ArrowLeft, ShoppingCart, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useCart, type CartItem } from "@/components/store/CartProvider";
+import { formatCOP, waLink } from "@/lib/utils";
+import { trackMetaEvent } from "@/lib/meta-events";
+import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, MessageCircle, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
+
+const WHATSAPP = "573143506623";
+const TEMPLATES = {
+  pedido: { label: "Pedido de productos", intro: "Hola Wired Technology, quiero solicitar el siguiente pedido:" },
+  cotizacion: { label: "Solicitar cotización", intro: "Hola Wired Technology, quisiera recibir una cotización de estos productos:" },
+  programado: { label: "Agendar pedido", intro: "Hola Wired Technology, deseo programar este pedido para la fecha indicada:" },
+  asesoria: { label: "Pedido con asesoría", intro: "Hola Wired Technology, necesito asesoría para confirmar esta selección de productos:" },
+};
+type TemplateKey = keyof typeof TEMPLATES;
+const INPUT = "w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper";
 
 export default function CheckoutPage() {
-  const { items, clearCart } = useCart();
-  const router = useRouter();
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    city: "",
-    barrio: "",
-    address: "",
-    reference: "",
-    notes: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { items, updateQty, removeItem } = useCart();
+  const [sequence, setSequence] = useState<string[]>([]);
+  const [mode, setMode] = useState<"automatico" | "manual">("automatico");
+  const [template, setTemplate] = useState<TemplateKey>("pedido");
+  const [form, setForm] = useState({ name: "", phone: "", city: "", barrio: "", address: "", reference: "", notes: "", date: "", fulfillment: "Entrega a domicilio" });
+  const [manual, setManual] = useState("");
+  const [origin, setOrigin] = useState("Web");
+  const keys = items.map(i => i.productId + ":" + (i.variantId || ""));
+  useEffect(() => {
+    setSequence(previous => [...previous.filter(key => keys.includes(key)), ...keys.filter(key => !previous.includes(key))]);
+  }, [keys.join("|")]);
+  useEffect(() => {
+    try { setOrigin(localStorage.getItem("wt_order_origin") || "Web"); } catch {}
+  }, []);
 
-  const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  // El envío nunca se presume gratis ni se estima desde el navegador.
-  // Se cotiza después con los datos reales del pedido y el destino.
-  const totalProducts = subtotal;
-  const valid = form.name && form.phone && form.city && form.barrio && form.address;
-
-  const handleSubmit = async () => {
-    if (!valid || loading) return;
-    setLoading(true);
-    setError("");
-    try {
-      let requestId = sessionStorage.getItem("wt_order_request_id");
-      if (!requestId) {
-        requestId = crypto.randomUUID();
-        sessionStorage.setItem("wt_order_request_id", requestId);
-      }
-      const origin = localStorage.getItem("wt_order_origin") || "Web";
-
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer: form,
-          items,
-          subtotal,
-          shipping: 0,
-          total: totalProducts,
-          shippingQuoted: false,
-          requestId,
-          origin,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear el pedido");
-      sessionStorage.removeItem("wt_order_request_id");
-      clearCart();
-      router.push(`/confirmacion?order=${data.orderNumber}`);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+  const ordered = useMemo(() => {
+    const index = new Map(sequence.map((key, i) => [key, i]));
+    return [...items].sort((a, b) => (index.get(a.productId + ":" + (a.variantId || "")) ?? 999) - (index.get(b.productId + ":" + (b.variantId || "")) ?? 999));
+  }, [items, sequence]);
+  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const move = (item: CartItem, direction: number) => {
+    const key = item.productId + ":" + (item.variantId || "");
+    const next = [...sequence];
+    const i = next.indexOf(key);
+    if (i < 0 || i + direction < 0 || i + direction >= next.length) return;
+    [next[i], next[i + direction]] = [next[i + direction], next[i]];
+    setSequence(next);
+  };
+  const generated = [
+    TEMPLATES[template].intro,
+    "",
+    ...ordered.flatMap((item, index) => [
+      String(index + 1) + ". " + item.name,
+      "Referencia: " + item.sku,
+      "Cantidad: " + item.qty,
+      "Precio unitario: " + formatCOP(item.price),
+      "Subtotal: " + formatCOP(item.price * item.qty),
+      "",
+    ]),
+    "TOTAL PRODUCTOS: " + formatCOP(subtotal),
+    "Envío: pendiente de cotización",
+    "",
+    "Cliente: " + (form.name || "Por confirmar"),
+    "Teléfono: " + (form.phone || "Por confirmar"),
+    "Ciudad: " + (form.city || "Por confirmar"),
+    "Modalidad: " + form.fulfillment,
+    ...(form.fulfillment === "Entrega a domicilio" ? ["Barrio: " + (form.barrio || "Por confirmar"), "Dirección: " + (form.address || "Por confirmar")] : []),
+    ...(form.reference ? ["Referencia de entrega: " + form.reference] : []),
+    ...(form.date ? ["Fecha solicitada: " + form.date + " (sujeta a confirmación)"] : []),
+    ...(form.notes ? ["Observaciones: " + form.notes] : []),
+    "Origen: " + origin,
+    "",
+    "Por favor confirmar disponibilidad, fecha y valor final antes de procesar el pedido.",
+  ].join("\n");
+  const message = mode === "manual" ? manual : generated;
+  const valid = items.length > 0 && (mode === "manual" ? manual.trim().length > 10 : !!form.name.trim() && !!form.phone.trim() && !!form.city.trim() && (form.fulfillment === "Recoger en tienda" || !!form.address.trim()));
+  const submit = () => {
+    if (!valid) return;
+    trackMetaEvent("InitiateCheckout", { content_ids: items.map(i => i.sku), content_type: "product", num_items: items.reduce((s, i) => s + i.qty, 0), value: subtotal, currency: "COP" });
+    trackMetaEvent("Contact", { content_ids: items.map(i => i.sku), content_type: "product", value: subtotal, currency: "COP" });
+    window.open(waLink(WHATSAPP, message), "_blank", "noopener,noreferrer");
   };
 
-  if (items.length === 0) {
-    return (
-      <div className="max-w-[560px] mx-auto px-5 py-16 text-center text-muted">
-        <ShoppingCart size={48} className="mx-auto mb-4" strokeWidth={1.2} />
-        <p className="mb-4">Tu pedido está vacío.</p>
-        <Link href="/" className="text-copper font-semibold hover:underline">Volver a la tienda</Link>
-      </div>
-    );
-  }
+  if (!items.length) return (
+    <div className="max-w-[600px] mx-auto px-5 py-16 text-center">
+      <ShoppingCart size={44} className="mx-auto mb-4 text-copper" />
+      <h1 className="font-display text-2xl font-bold mb-2">Tu pedido está vacío</h1>
+      <p className="text-muted mb-5">Selecciona los productos antes de armar tu pedido.</p>
+      <Link href="/" className="text-copper font-semibold">Explorar productos</Link>
+    </div>
+  );
 
   return (
-    <div className="max-w-[860px] mx-auto px-5 py-7">
-      <Link href="/" className="font-mono text-xs text-copper font-semibold inline-flex items-center gap-1 mb-4 hover:underline">
-        <ArrowLeft size={13} /> SEGUIR AGREGANDO PRODUCTOS
-      </Link>
-      <h1 className="font-display text-2xl font-bold mb-2">Enviar pedido</h1>
-      <p className="text-sm text-muted mb-6">Arma tu pedido y déjanos tus datos. Nuestro equipo revisará disponibilidad, cotizará el envío y coordinará la entrega contigo.</p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <div className="flex items-start gap-2 bg-green-50 border border-green/20 rounded-lg p-3 mb-5">
-            <ShieldCheck size={18} className="text-green shrink-0 mt-0.5" />
-            <div>
-              <div className="text-sm font-semibold">Pago en casa / contraentrega</div>
-              <div className="text-xs text-muted mt-0.5">No necesitas crear una cuenta ni pagar para dejar tu pedido. El envío se cotiza antes de confirmar el despacho.</div>
+    <div className="max-w-[1100px] mx-auto px-5 py-9">
+      <Link href="/" className="inline-flex gap-2 items-center font-semibold text-copper text-sm mb-5"><ArrowLeft size={16} /> Seguir comprando</Link>
+      <div className="mb-7">
+        <div className="text-xs uppercase font-mono tracking-widest text-copper mb-2">Pedidos Wired Technology</div>
+        <h1 className="font-display text-3xl font-bold">Arma y agenda tu pedido</h1>
+        <p className="text-muted text-sm mt-2">Organiza tus productos, elige cómo preparar el mensaje y confirma todo directamente con nuestro equipo por WhatsApp.</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-7 items-start">
+        <div className="space-y-6">
+          <section className="bg-card border border-hair rounded-xl p-5">
+            <h2 className="font-display text-lg font-bold mb-1">1. Personaliza tu pedido</h2>
+            <p className="text-sm text-muted mb-4">El modo automático completa una plantilla. También puedes escribir tu propio mensaje.</p>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button onClick={() => setMode("automatico")} className={"rounded-lg py-3 font-semibold text-sm border " + (mode === "automatico" ? "bg-graphite text-white border-graphite" : "border-hair")}>Mensaje automático</button>
+              <button onClick={() => { setManual(generated); setMode("manual"); }} className={"rounded-lg py-3 font-semibold text-sm border " + (mode === "manual" ? "bg-graphite text-white border-graphite" : "border-hair")}>Editar manualmente</button>
             </div>
-          </div>
-
-          {[
-            ["name", "Nombre completo *"],
-            ["phone", "Teléfono / WhatsApp *"],
-            ["email", "Correo (opcional)"],
-            ["city", "Ciudad *"],
-            ["barrio", "Barrio *"],
-            ["address", "Dirección *"],
-            ["reference", "Referencia de entrega (opcional)"],
-          ].map(([k, label]) => (
-            <div key={k} className="mb-3">
-              <label className="text-xs font-semibold text-slate-dark block mb-1">{label}</label>
-              <input
-                value={form[k as keyof typeof form]}
-                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper"
-              />
-            </div>
-          ))}
-
-          <div className="mb-3">
-            <label className="text-xs font-semibold text-slate-dark block mb-1">Observaciones (opcional)</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={3}
-              placeholder="Ej: horario de entrega, indicaciones o detalle del pedido"
-              className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper resize-none"
-            />
-          </div>
-
-          {error && <p className="text-alert text-sm mb-3">{error}</p>}
-          <button
-            onClick={handleSubmit}
-            disabled={!valid || loading}
-            className={`w-full py-3 rounded-lg font-semibold text-sm mt-2 transition-colors ${
-              valid && !loading ? "bg-copper text-white hover:bg-copper-bright" : "bg-paper text-muted cursor-not-allowed"
-            }`}
-          >
-            {loading ? "Enviando pedido..." : "Enviar pedido"}
-          </button>
-          <p className="font-mono text-[10px] text-muted text-center mt-3">
-            El pedido queda pendiente de disponibilidad y cotización de envío. El valor final se confirma antes del despacho.
-          </p>
-        </div>
-
-        <div className="bg-card border border-hair rounded-xl p-5 h-fit md:sticky md:top-6">
-          <div className="font-display font-bold text-sm mb-3">Tu pedido</div>
-          {items.map((it, i) => (
-            <div key={i} className="flex justify-between py-2 border-b border-hair text-sm gap-3">
-              <div>
-                <div className="font-medium">{it.name}</div>
-                <div className="font-mono text-[10px] text-muted">{it.qty} × {formatCOP(it.price)}</div>
+            {mode === "automatico" && <>
+              <label className="block text-xs font-semibold mb-1">Plantilla de mensaje</label>
+              <select className={INPUT + " mb-4"} value={template} onChange={e => setTemplate(e.target.value as TemplateKey)}>
+                {(Object.keys(TEMPLATES) as TemplateKey[]).map(key => <option key={key} value={key}>{TEMPLATES[key].label}</option>)}
+              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="block text-xs font-semibold mb-1">Nombre *</label><input className={INPUT} value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+                <div><label className="block text-xs font-semibold mb-1">Teléfono *</label><input className={INPUT} type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
+                <div><label className="block text-xs font-semibold mb-1">Ciudad *</label><input className={INPUT} value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
+                <div><label className="block text-xs font-semibold mb-1">Entrega o recogida</label><select className={INPUT} value={form.fulfillment} onChange={e => setForm({...form, fulfillment: e.target.value})}><option>Entrega a domicilio</option><option>Recoger en tienda</option></select></div>
+                {form.fulfillment === "Entrega a domicilio" && <>
+                  <div><label className="block text-xs font-semibold mb-1">Barrio</label><input className={INPUT} value={form.barrio} onChange={e => setForm({...form, barrio: e.target.value})} /></div>
+                  <div><label className="block text-xs font-semibold mb-1">Dirección *</label><input className={INPUT} value={form.address} onChange={e => setForm({...form, address: e.target.value})} /></div>
+                  <div className="sm:col-span-2"><label className="block text-xs font-semibold mb-1">Referencia de entrega</label><input className={INPUT} value={form.reference} onChange={e => setForm({...form, reference: e.target.value})} /></div>
+                </>}
+                <div className="sm:col-span-2"><label className="flex items-center gap-2 text-xs font-semibold mb-1"><CalendarDays size={14} /> Fecha deseada (opcional)</label><input type="date" min={new Date().toLocaleDateString("en-CA")} className={INPUT} value={form.date} onChange={e => setForm({...form, date: e.target.value})} /><p className="text-xs text-muted mt-1">La fecha queda solicitada, no reservada, hasta confirmación por WhatsApp.</p></div>
+                <div className="sm:col-span-2"><label className="block text-xs font-semibold mb-1">Indicaciones adicionales</label><textarea rows={3} className={INPUT} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Medidas, marcas, detalles del pedido..." /></div>
               </div>
-              <span className="font-display font-semibold whitespace-nowrap">{formatCOP(it.price * it.qty)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between text-sm mt-3"><span className="text-muted">Subtotal productos</span><span>{formatCOP(subtotal)}</span></div>
-          <div className="flex justify-between text-sm mt-1"><span className="text-muted">Envío</span><span className="font-semibold text-copper">Por cotizar</span></div>
-          <div className="flex justify-between font-bold mt-3 pt-3 border-t border-hair">
-            <span>Total productos</span><span className="font-display text-lg text-copper">{formatCOP(totalProducts)}</span>
-          </div>
-          <p className="text-[10px] leading-relaxed text-muted mt-2">El total final se calcula después de cotizar el envío según destino, peso y dimensiones del pedido.</p>
+            </>}
+            {mode === "manual" && <div><label className="block text-xs font-semibold mb-1">Tu mensaje editable *</label><textarea rows={15} className={INPUT + " font-mono"} value={manual} onChange={e => setManual(e.target.value)} /><p className="text-xs text-muted mt-2">Puedes ajustar libremente el texto antes de abrir WhatsApp.</p></div>}
+          </section>
+
+          <section className="bg-card border border-hair rounded-xl p-5">
+            <h2 className="font-display text-lg font-bold mb-1">2. Ordena los productos</h2>
+            <p className="text-xs text-muted mb-4">Modifica cantidades, elimina productos o cambia su orden con las flechas.</p>
+            {ordered.map((it, i) => {
+              const originalIndex = items.findIndex(x => x.productId === it.productId && x.variantId === it.variantId);
+              return <div key={it.productId + ":" + it.variantId} className="flex items-center gap-3 py-3 border-b border-hair">
+                <div className="flex flex-col gap-1"><button disabled={i === 0} onClick={() => move(it, -1)} aria-label="Subir producto" className="disabled:opacity-25"><ArrowUp size={16}/></button><button disabled={i === ordered.length - 1} onClick={() => move(it, 1)} aria-label="Bajar producto" className="disabled:opacity-25"><ArrowDown size={16}/></button></div>
+                <div className="min-w-0 flex-1"><div className="text-sm font-semibold">{it.name}</div><div className="text-xs text-muted">{it.sku} · {formatCOP(it.price)} c/u</div><div className="flex gap-2 items-center mt-2"><button className="border border-hair rounded p-1" onClick={() => updateQty(originalIndex, -1)}><Minus size={13}/></button><span className="text-sm">{it.qty}</span><button className="border border-hair rounded p-1" onClick={() => updateQty(originalIndex, 1)}><Plus size={13}/></button><button aria-label="Quitar producto" onClick={() => removeItem(originalIndex)} className="text-alert ml-2"><Trash2 size={14}/></button></div></div>
+                <div className="text-sm font-bold whitespace-nowrap">{formatCOP(it.price * it.qty)}</div>
+              </div>;
+            })}
+          </section>
         </div>
+        <aside className="bg-white border border-hair rounded-xl p-5 lg:sticky lg:top-24">
+          <h2 className="font-display text-lg font-bold mb-3">3. Confirmación por WhatsApp</h2>
+          <div className="flex justify-between text-sm border-b border-hair pb-3"><span>Subtotal de productos</span><strong>{formatCOP(subtotal)}</strong></div>
+          <div className="flex justify-between text-sm py-3"><span>Envío</span><span className="text-copper font-semibold">Por cotizar</span></div>
+          <p className="text-xs text-muted mb-3">Revisa el mensaje que enviaremos a WhatsApp. Wired confirmará existencias, costos y fecha antes de procesar el pedido.</p>
+          <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed bg-paper border border-hair rounded-lg p-3 max-h-80 overflow-auto font-sans">{message}</pre>
+          <button disabled={!valid} onClick={submit} className="mt-4 w-full bg-green text-white font-semibold rounded-lg py-3 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"><MessageCircle size={18}/> Confirmar por WhatsApp</button>
+          <p className="text-[11px] text-center text-muted mt-3">Al continuar se abrirá WhatsApp con el mensaje preparado. El pedido no estará confirmado hasta recibir respuesta de Wired Technology.</p>
+        </aside>
       </div>
     </div>
   );
