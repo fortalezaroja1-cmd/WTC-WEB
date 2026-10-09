@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
-import { ShoppingCart, Plus, Minus, MessageCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ShoppingCart, Plus, Minus, ArrowRight } from "lucide-react";
 import { useCart } from "./CartProvider";
-import { formatCOP, waLink } from "@/lib/utils";
+import { formatCOP } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
 interface Variant {
@@ -24,8 +25,9 @@ interface Props {
 
 export function AddToCart({ productId, productName, productSku, productSlug, productImage, productUnit, price, stock, variants, whatsapp }: Props) {
   const { addItem } = useCart();
+  const router = useRouter();
   const hasVariants = variants && variants.length > 0;
-  const [selId, setSelId] = useState(hasVariants ? variants[0].id : null);
+  const [selId, setSelId] = useState(hasVariants ? (variants.find(v => v.stock > 0)?.id || variants[0].id) : null);
   const [qty, setQty] = useState(1);
 
   const sel = hasVariants ? variants.find((v) => v.id === selId) : null;
@@ -36,6 +38,7 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
   const displayName = productName + (sel ? ` · ${sel.name}` : "");
 
   const handleAdd = () => {
+    if (curStock <= 0) return;
     addItem({
       productId,
       variantId: sel?.id || null,
@@ -57,52 +60,36 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
     setQty(1);
   };
 
-  const waMsg = [
-    "Hola, quiero información para comprar este producto:",
-    "",
-    `Producto: ${displayName}`,
-    `SKU: ${curSku}`,
-    `Cantidad: ${qty}`,
-    `Precio unitario: ${formatCOP(curPrice)}`,
-    `Subtotal: ${formatCOP(curPrice * qty)}`,
-    "",
-    "¿Me confirman disponibilidad y valor del envío?",
-  ].join("\n");
-
-  const handleWhatsApp = () => {
-    trackMetaEvent("Contact", {
-      content_ids: [curSku],
-      content_type: "product",
-      content_name: displayName,
-      value: curPrice * qty,
-      currency: "COP",
-    });
+  const startOrder = () => {
+    if (curStock <= 0) return;
+    handleAdd();
+    router.push("/checkout");
   };
 
   return (
     <div>
       <div className="flex items-baseline gap-2.5 mb-1.5">
         <span className="font-display text-3xl font-bold text-copper">{formatCOP(curPrice)}</span>
-        <span className="font-mono text-xs text-muted">/ {productUnit}</span>
+        <span className="text-sm text-muted">/ {productUnit}</span>
       </div>
 
       <div className="mb-5">
         {curStock <= 0 ? (
-          <span className="text-xs font-semibold bg-red-50 text-alert px-2.5 py-1 rounded-full">Agotado</span>
+          <span className="text-sm font-semibold bg-red-50 text-alert px-2.5 py-1 rounded-full">Agotado</span>
         ) : curStock <= 5 ? (
-          <span className="text-xs font-semibold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full">Últimas {curStock} unidades</span>
+          <span className="text-sm font-semibold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full">Últimas {curStock} unidades</span>
         ) : (
-          <span className="text-xs font-semibold bg-green-50 text-green px-2.5 py-1 rounded-full">Disponible</span>
+          <span className="text-sm font-semibold bg-green-50 text-green px-2.5 py-1 rounded-full">Disponible</span>
         )}
       </div>
 
       {hasVariants && (
         <div className="mb-5">
-          <label className="text-xs font-semibold text-slate-dark block mb-2">Selecciona variante</label>
+          <label className="text-sm font-semibold text-slate-dark block mb-2">Selecciona variante</label>
           <div className="flex flex-wrap gap-2">
             {variants.map((v) => (
-              <button key={v.id} onClick={() => setSelId(v.id)} disabled={v.stock <= 0}
-                className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+              <button key={v.id} onClick={() => { setSelId(v.id); setQty(1); }} disabled={v.stock <= 0}
+                className={`px-4 min-h-12 py-2 rounded-lg border text-sm font-semibold transition-colors ${
                   selId === v.id ? "border-copper bg-[#FBF3EC]" : v.stock <= 0 ? "border-hair bg-paper text-muted cursor-not-allowed" : "border-hair hover:border-copper"
                 }`}>
                 <div>{v.name}</div>
@@ -115,24 +102,24 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
 
       <div className="flex gap-3 items-center mb-4">
         <div className="flex items-center border border-hair rounded-lg">
-          <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-2.5"><Minus size={15} /></button>
-          <span className="font-mono min-w-[40px] text-center font-semibold">{qty}</span>
-          <button onClick={() => setQty((q) => Math.min(curStock || 1, q + 1))} className="px-3 py-2.5"><Plus size={15} /></button>
+          <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Quitar una unidad" className="h-12 w-12 flex items-center justify-center"><Minus size={18} /></button>
+          <span className="font-mono min-w-[45px] text-center text-lg font-semibold">{qty}</span>
+          <button onClick={() => setQty((q) => Math.min(curStock || 1, q + 1))} aria-label="Agregar una unidad" className="h-12 w-12 flex items-center justify-center"><Plus size={18} /></button>
         </div>
         <button onClick={handleAdd} disabled={curStock <= 0}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-sm transition-colors ${
+          className={`flex-1 min-h-14 px-3 flex items-center justify-center gap-2 rounded-xl font-semibold text-base transition-colors ${
             curStock <= 0 ? "bg-paper text-muted cursor-not-allowed" : "bg-copper text-white hover:bg-copper-bright"
           }`}>
           <ShoppingCart size={17} /> {curStock <= 0 ? "Agotado" : "Agregar al carrito"}
         </button>
       </div>
 
-      <a href={waLink(whatsapp, waMsg)} target="_blank" rel="noreferrer" onClick={handleWhatsApp}
-        className="w-full flex items-center justify-center gap-2 bg-green text-white py-3 rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity">
-        <MessageCircle size={17} /> Pedir por WhatsApp
-      </a>
-      <p className="mt-2 text-[10px] text-muted text-center">
-        WhatsApp abrirá con el producto, SKU, cantidad y valor ya diligenciados.
+      <button type="button" onClick={startOrder} disabled={curStock <= 0}
+        className="w-full min-h-14 flex items-center justify-center gap-2 bg-green text-white rounded-xl font-bold text-base disabled:opacity-40">
+        Comprar este producto <ArrowRight size={19} aria-hidden="true" />
+      </button>
+      <p className="mt-3 text-sm text-muted text-center leading-relaxed">
+        No tienes que pagar todavía. Primero revisas tu pedido y después lo envías por WhatsApp para confirmar disponibilidad y entrega.
       </p>
     </div>
   );
