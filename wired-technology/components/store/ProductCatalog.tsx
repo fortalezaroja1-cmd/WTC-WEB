@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal, ShoppingCart } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
 import { trackMetaEvent } from "@/lib/meta-events";
@@ -214,12 +214,12 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
   return (
     <>
       <section className="bg-graphite text-white border-b border-slate-dark">
-        <div className="max-w-[1380px] mx-auto px-5 py-8">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-5 lg:justify-between mb-6">
+        <div className="max-w-[1380px] mx-auto px-4 sm:px-5 py-5 sm:py-8">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:justify-between mb-5">
             <div>
               <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold mb-2">Catálogo Wired Technology</div>
               <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight">Productos</h1>
-              <p className="text-sm text-muted mt-2">{products.length} productos disponibles para consultar.</p>
+              <p className="text-base text-white/80 mt-2">Busca, elige y agrega los productos que necesitas. Hay {products.length} referencias en el catálogo.</p>
             </div>
             <button type="button" onClick={downloadCatalog} disabled={generating || products.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-copper px-5 py-3 font-semibold text-sm text-white hover:bg-copper-bright transition-colors disabled:opacity-60 disabled:cursor-wait">
               {generating ? <LoaderCircle size={17} className="animate-spin" /> : <Download size={17} />}
@@ -228,33 +228,33 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
           </div>
 
           <div className="relative mb-4">
-            <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar producto, calibre, referencia o marca..." className="w-full rounded-xl border border-slate-dark bg-graphite-2 pl-12 pr-4 py-3.5 text-sm text-white placeholder:text-muted focus:outline-none focus:border-copper" />
+            <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-graphite" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar producto, calibre, referencia o marca..." aria-label="Buscar por producto, calibre, referencia o marca" type="search" className="w-full rounded-xl border border-slate-dark bg-white pl-12 pr-4 min-h-14 text-base text-ink placeholder:text-muted focus:outline-none focus:border-copper" />
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-1">
-            <button type="button" onClick={() => setActiveCategory("Todos")} className={`shrink-0 rounded-full border px-4 py-2 font-mono text-xs transition-colors ${activeCategory === "Todos" ? "border-copper bg-copper text-white" : "border-slate-dark bg-graphite-2 text-muted hover:border-copper hover:text-white"}`}>Todos ({products.length})</button>
+            <button type="button" onClick={() => setActiveCategory("Todos")} className={`shrink-0 min-h-12 rounded-full border px-4 py-2 font-semibold text-sm transition-colors ${activeCategory === "Todos" ? "border-copper bg-copper text-white" : "border-slate-dark bg-graphite-2 text-muted hover:border-copper hover:text-white"}`}>Todos ({products.length})</button>
             {categoryCounts.map(([category, count]) => (
-              <button type="button" key={category} onClick={() => setActiveCategory(category)} className={`shrink-0 rounded-full border px-4 py-2 font-mono text-xs transition-colors ${activeCategory === category ? "border-copper bg-copper text-white" : "border-slate-dark bg-graphite-2 text-muted hover:border-copper hover:text-white"}`}>{category} ({count})</button>
+              <button type="button" key={category} onClick={() => setActiveCategory(category)} className={`shrink-0 min-h-12 rounded-full border px-4 py-2 font-semibold text-sm transition-colors ${activeCategory === category ? "border-copper bg-copper text-white" : "border-slate-dark bg-graphite-2 text-muted hover:border-copper hover:text-white"}`}>{category} ({count})</button>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="max-w-[1380px] mx-auto px-5 py-8">
+      <section className="max-w-[1380px] mx-auto px-4 sm:px-5 py-6">
         <div className="flex items-center justify-between gap-4 mb-5">
           <p className="font-mono text-xs text-muted">Mostrando {filteredProducts.length} de {products.length} productos</p>
           {(query || activeCategory !== "Todos") && <button type="button" onClick={() => { setQuery(""); setActiveCategory("Todos"); }} className="font-mono text-xs text-copper font-semibold hover:underline">Limpiar filtros</button>}
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div className="rounded-xl border border-hair bg-card py-20 text-center text-muted">No se encontraron productos con esos filtros.</div>
+          <div className="rounded-xl border border-hair bg-card py-16 px-4 text-center text-base text-muted">No encontramos productos con esa búsqueda. Intenta escribir un nombre más corto o una referencia.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredProducts.map((product) => (
               <article key={product.id} className="group overflow-hidden rounded-2xl border border-hair bg-card shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 <Link href={`/productos/${product.slug}`} className="block">
-                  <div className="relative h-[360px] md:h-[390px] bg-white border-b border-hair overflow-hidden">
+                  <div className="relative h-[220px] sm:h-[280px] lg:h-[330px] bg-white border-b border-hair overflow-hidden">
                     {product.image ? (
                       <Image src={product.image} alt={product.name} fill className="object-contain group-hover:scale-[1.02] transition-transform duration-300" sizes="(max-width:640px) 100vw, (max-width:1280px) 50vw, 33vw" />
                     ) : (
@@ -265,37 +265,33 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                   </div>
 
                   <div className="px-5 pt-5">
-                    <div className="font-mono text-[10px] text-muted mb-2">{product.sku}</div>
+                    <div className="text-xs text-muted mb-2">Referencia: {product.sku}</div>
                     <h2 className="font-display text-lg font-semibold leading-snug text-ink">{product.name}</h2>
-                    <p className="mt-2 text-[13px] leading-relaxed text-muted line-clamp-2">{product.description || `${product.brand} · ${product.unit}`}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted line-clamp-2">{product.description || `${product.brand} · ${product.unit}`}</p>
                   </div>
                 </Link>
 
-                <div className="px-5 pb-5 pt-5 flex items-end justify-between gap-3 min-h-[92px]">
-                  <Link href={`/productos/${product.slug}`} className="min-w-0">
-                    <div className="font-mono text-[10px] text-muted mb-1">{product.hasVariants ? "desde" : `por ${product.unit}`}</div>
-                    <div className="font-display text-2xl font-bold text-copper">{formatCOP(product.price)}</div>
-                  </Link>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {product.totalStock <= 0 ? (
-                      <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-alert">Agotado</span>
-                    ) : product.totalStock <= 5 ? (
-                      <span className="hidden sm:inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Últimas {product.totalStock}</span>
-                    ) : (
-                      <span className="hidden sm:inline-flex rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green">Disponible</span>
-                    )}
-
-                    {product.totalStock > 0 && product.hasVariants ? (
-                      <Link href={`/productos/${product.slug}`} aria-label={`Ver opciones de ${product.name}`} className="h-11 px-3 rounded-xl border border-copper text-copper bg-white inline-flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 transition-transform">
-                        <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Opciones</span>
-                      </Link>
-                    ) : product.totalStock > 0 ? (
-                      <button type="button" onClick={() => quickAdd(product)} aria-label={`Agregar ${product.name} al carrito`} className="h-11 w-11 rounded-xl bg-copper text-white inline-flex items-center justify-center shadow-sm active:scale-95 transition-transform">
-                        <Plus size={23} strokeWidth={2.4} />
-                      </button>
-                    ) : null}
+                <div className="px-5 pb-5 pt-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <div className="text-xs text-muted mb-1">{product.hasVariants ? "Precio desde" : `Precio por ${product.unit}`}</div>
+                      <div className="font-display text-2xl font-bold text-copper">{formatCOP(product.price)}</div>
+                    </div>
+                    <span className={`text-sm font-semibold ${product.totalStock <= 0 ? "text-alert" : "text-green"}`}>
+                      {product.totalStock <= 0 ? "Agotado" : "Disponible"}
+                    </span>
                   </div>
+                  {product.totalStock <= 0 ? (
+                    <Link href={`/productos/${product.slug}`} className="w-full min-h-12 rounded-xl border border-hair font-semibold text-sm flex items-center justify-center">Ver detalles</Link>
+                  ) : product.hasVariants ? (
+                    <Link href={`/productos/${product.slug}`} className="w-full min-h-14 rounded-xl bg-copper text-white font-bold text-base flex items-center justify-center gap-2">
+                      <SlidersHorizontal size={19} aria-hidden="true" /> Elegir opción
+                    </Link>
+                  ) : (
+                    <button type="button" onClick={() => quickAdd(product)} className="w-full min-h-14 rounded-xl bg-copper text-white font-bold text-base flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+                      <ShoppingCart size={20} aria-hidden="true" /> Agregar al carrito
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
