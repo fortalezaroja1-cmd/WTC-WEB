@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useCart, type CartItem } from "@/components/store/CartProvider";
 import { formatCOP, waLink } from "@/lib/utils";
-import { trackMetaEvent } from "@/lib/meta-events";
+import { META_CONSENT_ACCEPTED_EVENT, trackMetaEvent } from "@/lib/meta-events";
 import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, MessageCircle, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 
 const WHATSAPP = "573143506623";
@@ -19,6 +19,7 @@ const INPUT = "w-full min-h-12 border border-hair rounded-xl px-3 py-2.5 text-ba
 export default function CheckoutPage() {
   const { items, updateQty, removeItem } = useCart();
   const [sequence, setSequence] = useState<string[]>([]);
+  const checkoutTracked = useRef(false);
   const [mode, setMode] = useState<"automatico" | "manual">("automatico");
   const [template, setTemplate] = useState<TemplateKey>("pedido");
   const [form, setForm] = useState({ name: "", phone: "", city: "", barrio: "", address: "", reference: "", notes: "", date: "", fulfillment: "Entrega a domicilio" });
@@ -37,6 +38,23 @@ export default function CheckoutPage() {
     return [...items].sort((a, b) => (index.get(a.productId + ":" + (a.variantId || "")) ?? 999) - (index.get(b.productId + ":" + (b.variantId || "")) ?? 999));
   }, [items, sequence]);
   const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  useEffect(() => {
+    if (!items.length || checkoutTracked.current) return;
+    const trackCheckout = () => {
+      if (checkoutTracked.current) return;
+      const sent = trackMetaEvent("InitiateCheckout", {
+        content_ids: items.map(i => i.sku),
+        content_type: "product",
+        num_items: items.reduce((sum, i) => sum + i.qty, 0),
+        value: subtotal,
+        currency: "COP",
+      });
+      if (sent) checkoutTracked.current = true;
+    };
+    trackCheckout();
+    window.addEventListener(META_CONSENT_ACCEPTED_EVENT, trackCheckout);
+    return () => window.removeEventListener(META_CONSENT_ACCEPTED_EVENT, trackCheckout);
+  }, [items, subtotal]);
   const move = (item: CartItem, direction: number) => {
     const key = item.productId + ":" + (item.variantId || "");
     const next = [...sequence];
@@ -74,8 +92,15 @@ export default function CheckoutPage() {
   const message = mode === "manual" ? manual : generated;
   const valid = items.length > 0 && (mode === "manual" ? manual.trim().length > 10 : !!form.name.trim() && !!form.phone.trim() && !!form.city.trim() && (form.fulfillment === "Recoger en tienda" || !!form.address.trim()));
   const recordContact = () => {
-    trackMetaEvent("InitiateCheckout", { content_ids: items.map(i => i.sku), content_type: "product", num_items: items.reduce((s, i) => s + i.qty, 0), value: subtotal, currency: "COP" });
-    trackMetaEvent("Contact", { content_ids: items.map(i => i.sku), content_type: "product", value: subtotal, currency: "COP" });
+    const eventParams = {
+      content_ids: items.map(i => i.sku),
+      content_type: "product",
+      value: subtotal,
+      currency: "COP",
+    };
+    trackMetaEvent("Contact", eventParams);
+    // Lead indica solicitud iniciada, no pago ni compra confirmada.
+    if (mode === "automatico") trackMetaEvent("Lead", eventParams);
   };
 
   if (!items.length) return (
