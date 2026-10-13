@@ -11,6 +11,8 @@ export default function PrivacyPage() {
     <p>Usamos la información para responder mensajes, gestionar conversaciones y clientes, prestar soporte, procesar solicitudes comerciales, mantener la seguridad del servicio y cumplir obligaciones legales aplicables.</p>
     <h2>Servicios de terceros</h2>
     <p>Wired Technology puede utilizar proveedores tecnológicos necesarios para operar el servicio, incluyendo servicios de Meta Platforms para WhatsApp, Facebook e Instagram y proveedores de infraestructura. El tratamiento realizado por esos proveedores también está sujeto a sus propias políticas y condiciones.</p>
+    <h2>Cookies de publicidad y medición</h2>
+    <p>En el catálogo de productos podemos utilizar el píxel de Meta (identificador 1935627170946474) para medir visitas, productos consultados, carritos y solicitudes de contacto, y evaluar anuncios en Facebook e Instagram. El píxel publicitario se activa únicamente si la persona acepta las cookies de publicidad. Es posible rechazarlo sin perder acceso a la tienda o cambiar la decisión mediante el enlace «Preferencias de cookies» al final del catálogo. El evento de solicitud de contacto no significa que exista un pago o una compra confirmada.</p>
     <h2>Conservación y seguridad</h2>
     <p>Conservamos los datos durante el tiempo razonablemente necesario para las finalidades descritas o para cumplir obligaciones legales. Aplicamos medidas técnicas y organizativas destinadas a proteger la información.</p>
     <h2>Derechos y solicitudes</h2>
