@@ -5,8 +5,8 @@ import { cableCatalogHref } from "../lib/storefront-navigation";
 test("el botón Buscar cables usa la categoría existente, no un slug fijo", () => {
   assert.equal(cableCatalogHref([
     { name: "Iluminación", slug: "iluminacion" },
-    { name: "Cables Centelsa", slug: "conductores-electricos" },
-  ]), "/categorias/conductores-electricos");
+    { name: "Cables y Alambres", slug: "cables-y-alambres" },
+  ]), "/categorias/cables-y-alambres");
 });
 
 test("si no existe categoría de cables, abre búsqueda de productos y evita el 404", () => {
