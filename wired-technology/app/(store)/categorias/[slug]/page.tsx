@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
@@ -11,6 +11,8 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
     where: { slug },
     include: { subcategories: { where: { active: true }, orderBy: { order: "asc" } } },
   });
+  // Compatibilidad con enlaces antiguos: la categoría pudo cambiar de slug.
+  if (!category && slug === "cables") redirect("/productos?q=cable");
   if (!category) notFound();
 
   const products = await prisma.product.findMany({
