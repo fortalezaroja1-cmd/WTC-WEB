@@ -4,6 +4,7 @@ import { CartProvider } from "@/components/store/CartProvider";
 import { StoreHeader } from "@/components/store/Header";
 import { MessageCircle } from "lucide-react";
 import WiredAssistant from "@/components/WiredAssistant";
+import { MetaPixelConsent, CookiePreferencesButton } from "@/components/store/MetaPixelConsent";
 
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const categories = await prisma.category.findMany({
@@ -21,6 +22,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   return (
     <CartProvider whatsapp={whatsapp}>
+      <MetaPixelConsent />
       <div className="min-h-screen flex flex-col">
         <StoreHeader categories={categories} storeName={cfg.storeName || "Wired Technology"} tagline={cfg.tagline || ""} />
 
@@ -50,7 +52,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
             </div>
           </div>
           <div className="border-t border-slate-dark text-center py-4 font-mono text-xs">
-            © {new Date().getFullYear()} WIRED TECHNOLOGY
+            © {new Date().getFullYear()} WIRED TECHNOLOGY <span className="mx-2">·</span> <CookiePreferencesButton />
           </div>
         </footer>
 
