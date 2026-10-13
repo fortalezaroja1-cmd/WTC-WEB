@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal, ShoppingCart } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
@@ -69,6 +69,12 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
   const { addItem } = useCart();
   const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState("Todos");
+
+  // La búsqueda del encabezado también funciona cuando ya estamos en /productos.
+  useEffect(() => {
+    setQuery(initialQuery);
+    setActiveCategory("Todos");
+  }, [initialQuery]);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
 
