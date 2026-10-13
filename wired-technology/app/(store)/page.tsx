@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "@/components/store/ProductCard";
 import { formatCOP } from "@/lib/utils";
+import { cableCatalogHref } from "@/lib/storefront-navigation";
 import { Truck, ShieldCheck, MessageCircle, ChevronRight, Star } from "lucide-react";
 
 export const revalidate = 60; // ISR: reconstruir cada 60s
@@ -20,6 +21,7 @@ export default async function HomePage() {
   const cfg: Record<string, string> = {};
   settings.forEach((s) => (cfg[s.key] = s.value));
   const freeShipFrom = Number(cfg.freeShipFrom) || 250000;
+  const cableHref = cableCatalogHref(categories);
 
   return (
     <>
@@ -39,7 +41,7 @@ export default async function HomePage() {
             <Link href="/productos" className="min-h-14 bg-copper text-white font-bold text-base px-5 py-3 rounded-xl inline-flex items-center justify-center gap-2 hover:bg-copper-bright transition-colors">
               Ver todos los productos <ChevronRight size={19} />
             </Link>
-            <Link href="/categorias/cables" className="min-h-14 border border-slate-dark text-white font-semibold text-base px-5 py-3 rounded-xl inline-flex items-center justify-center gap-2 hover:border-copper transition-colors">
+            <Link href={cableHref} className="min-h-14 border border-slate-dark text-white font-semibold text-base px-5 py-3 rounded-xl inline-flex items-center justify-center gap-2 hover:border-copper transition-colors">
               Buscar cables
             </Link>
           </div>
