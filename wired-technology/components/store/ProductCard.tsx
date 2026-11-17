@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Package } from "lucide-react";
-import { formatCOP } from "@/lib/utils";
+import { formatCOP, getDiscountPricing } from "@/lib/utils";
 
 interface Props {
   slug: string;
@@ -16,6 +16,8 @@ interface Props {
 }
 
 export function ProductCard({ slug, name, sku, brand, image, price, hasVariants, unit, totalStock }: Props) {
+  const offer = getDiscountPricing(price);
+
   return (
     <Link
       href={`/productos/${slug}`}
@@ -38,6 +40,9 @@ export function ProductCard({ slug, name, sku, brand, image, price, hasVariants,
         <span className="absolute right-4 top-4 rounded-md border border-hair bg-white/95 px-2.5 py-1 font-mono text-[10px] text-slate-dark shadow-sm">
           {brand}
         </span>
+        <span className="absolute left-4 bottom-4 rounded-full bg-alert px-3 py-1 text-xs font-bold text-white shadow-sm">
+          -{offer.discountPercent}%
+        </span>
       </div>
 
       <div className="p-4 sm:p-5 flex flex-col min-h-[200px]">
@@ -47,7 +52,9 @@ export function ProductCard({ slug, name, sku, brand, image, price, hasVariants,
         <div className="mt-auto pt-4 flex items-end justify-between gap-2 flex-wrap">
           <div>
             <div className="text-xs text-muted mb-1">{hasVariants ? "desde" : `por ${unit}`}</div>
-            <div className="font-display text-xl sm:text-2xl font-bold text-copper">{formatCOP(price)}</div>
+            <div className="text-sm text-muted line-through decoration-alert/70">{formatCOP(offer.original)}</div>
+            <div className="font-display text-xl sm:text-2xl font-bold text-copper">{formatCOP(offer.current)}</div>
+            <div className="mt-1 text-xs font-bold text-green">Te ahorras {formatCOP(offer.savings)}</div>
           </div>
           {totalStock <= 0 ? (
             <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-alert">Agotado</span>
@@ -64,3 +71,4 @@ export function ProductCard({ slug, name, sku, brand, image, price, hasVariants,
     </Link>
   );
 }
+
