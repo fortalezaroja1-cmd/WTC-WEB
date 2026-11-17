@@ -1,26 +1,21 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "@/components/store/ProductCard";
-import { formatCOP } from "@/lib/utils";
 import { cableCatalogHref } from "@/lib/storefront-navigation";
-import { Truck, ShieldCheck, MessageCircle, ChevronRight, Star } from "lucide-react";
+import { Truck, MessageCircle, ChevronRight, Star } from "lucide-react";
 
 export const revalidate = 60; // ISR: reconstruir cada 60s
 
 export default async function HomePage() {
-  const [categories, featuredProducts, settings] = await Promise.all([
+  const [categories, featuredProducts] = await Promise.all([
     prisma.category.findMany({ where: { active: true }, orderBy: { order: "asc" }, include: { subcategories: true } }),
     prisma.product.findMany({
       where: { featured: true, status: "PUBLISHED" },
       include: { brand: true, variants: true, images: { orderBy: { order: "asc" }, take: 1 } },
       take: 8,
     }),
-    prisma.siteSetting.findMany(),
   ]);
 
-  const cfg: Record<string, string> = {};
-  settings.forEach((s) => (cfg[s.key] = s.value));
-  const freeShipFrom = Number(cfg.freeShipFrom) || 250000;
   const cableHref = cableCatalogHref(categories);
 
   return (
@@ -47,16 +42,14 @@ export default async function HomePage() {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-4 mt-8">
             {[
-              [Truck, "Envío gratis", `Desde ${formatCOP(freeShipFrom)}`],
-              [ShieldCheck, "Pago seguro", "Mercado Pago"],
-              [MessageCircle, "Asesoría", "Por WhatsApp"],
-            ].map(([Icon, title, sub]) => (
-              <div key={title as string} className="flex gap-2.5 items-center">
-                {/* @ts-ignore */}
-                <Icon size={20} className="text-copper" />
+              { icon: Truck, title: "Entrega", detail: "Costo y cobertura por confirmar" },
+              { icon: MessageCircle, title: "Pedidos y asesoría", detail: "Por WhatsApp" },
+            ].map(({ icon: Icon, title, detail }) => (
+              <div key={title} className="flex gap-2.5 items-center">
+                <Icon size={20} className="text-copper" aria-hidden="true" />
                 <div>
-                  <div className="font-semibold text-sm">{title as string}</div>
-                  <div className="text-xs text-muted">{sub as string}</div>
+                  <div className="font-semibold text-sm">{title}</div>
+                  <div className="text-xs text-muted">{detail}</div>
                 </div>
               </div>
             ))}
