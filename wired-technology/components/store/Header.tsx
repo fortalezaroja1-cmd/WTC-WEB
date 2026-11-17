@@ -1,15 +1,9 @@
 "use client";
+
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Search,
-  ShoppingCart,
-  Menu,
-  X,
-  ChevronRight,
-  ShieldCheck,
-} from "lucide-react";
+import { ChevronRight, Menu, MessageCircle, Search, ShieldCheck, ShoppingCart, X } from "lucide-react";
 import { useCart } from "./CartProvider";
 
 interface Category {
@@ -20,159 +14,46 @@ interface Category {
   subcategories: { id: string; name: string; slug: string }[];
 }
 
-export function StoreHeader({
-  categories,
-  storeName,
-  tagline,
-}: {
-  categories: Category[];
-  storeName: string;
-  tagline: string;
-}) {
+export function StoreHeader({ categories, tagline }: { categories: Category[]; storeName: string; tagline: string }) {
   const router = useRouter();
   const { items, setOpen } = useCart();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const count = items.reduce((s, i) => s + i.qty, 0);
+  const count = items.reduce((sum, item) => sum + item.qty, 0);
+  const whatsappUrl = `https://wa.me/573143506623?text=${encodeURIComponent("Hola Wired Technology, necesito cotizar una referencia.")}`;
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim())
-      router.push(`/productos?q=${encodeURIComponent(query.trim())}`);
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (query.trim()) router.push(`/productos?q=${encodeURIComponent(query.trim())}`);
   };
 
   return (
     <>
-      <header className="bg-graphite sticky top-0 z-40">
-        <div className="max-w-[1180px] mx-auto px-4 sm:px-5 flex items-center gap-3 sm:gap-4 h-[66px]">
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="text-white min-w-11 min-h-11 flex items-center justify-center rounded-lg md:hidden"
-            aria-label="Abrir menú"
-          >
-            <Menu size={22} />
-          </button>
+      <div className="bg-copper px-4 py-2 text-center text-[11px] font-semibold text-white sm:text-xs">
+        Precios visibles en COP · Confirma disponibilidad y entrega antes de pagar
+      </div>
+      <header className="sticky top-0 z-40 bg-graphite shadow-lg">
+        <div className="mx-auto flex h-[66px] max-w-[1180px] items-center gap-3 px-4 sm:gap-4 sm:px-5">
+          <button onClick={() => setMenuOpen(true)} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-white md:hidden" aria-label="Abrir menú"><Menu size={22} /></button>
+          <Link href="/" className="shrink-0 min-w-0"><div className="whitespace-nowrap font-display text-[14px] font-bold tracking-tight text-white min-[380px]:text-base sm:text-lg">WIRED<span className="text-copper">·</span>TECHNOLOGY</div><div className="hidden font-mono text-[9.5px] uppercase tracking-[.14em] text-muted sm:block">{tagline}</div></Link>
 
-          <Link href="/" className="shrink-0 min-w-0">
-            <div className="font-display font-bold text-white text-[14px] min-[380px]:text-base sm:text-lg tracking-tight whitespace-nowrap">
-              WIRED<span className="text-copper">·</span>TECHNOLOGY
-            </div>
-            <div className="font-mono text-[9.5px] tracking-[.14em] uppercase text-muted hidden sm:block">
-              {tagline}
-            </div>
-          </Link>
+          <nav className="ml-3 hidden items-center gap-1 lg:flex" aria-label="Navegación principal">
+            <Link href="/productos" className="rounded-lg px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/5 hover:text-white">Productos</Link>
+            {categories.slice(0, 3).map((category) => <Link key={category.id} href={`/categorias/${category.slug}`} className="rounded-lg px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/5 hover:text-white">{category.name}</Link>)}
+          </nav>
 
-          <form
-            onSubmit={handleSearch}
-            className="flex-1 max-w-[460px] ml-3 relative hidden sm:block"
-          >
-            <Search
-              size={17}
-              className="absolute left-3 top-[11px] text-muted"
-            />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar cable, breaker, panel LED, SKU…"
-              className="w-full pl-9 pr-4 py-2.5 bg-graphite-2 border border-slate-dark rounded-lg text-white text-sm placeholder:text-muted focus:outline-none focus:border-copper"
-            />
-          </form>
+          <form onSubmit={handleSearch} className="relative ml-auto hidden max-w-[360px] flex-1 sm:block"><Search size={17} className="absolute left-3 top-[11px] text-muted" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Calibre, producto o SKU…" className="w-full rounded-lg border border-slate-dark bg-graphite-2 py-2.5 pl-9 pr-4 text-sm text-white placeholder:text-muted focus:border-copper focus:outline-none" /></form>
 
-          <div className="ml-auto flex items-center gap-2">
-            <Link
-              href="/admin/login"
-              className="hidden md:flex items-center gap-1.5 text-muted text-xs border border-slate-dark rounded-lg px-3 py-2 hover:border-copper hover:text-copper transition-colors"
-            >
-              <ShieldCheck size={14} /> Administrar catálogo
-            </Link>
-
-            <Link
-              href="/admin/login"
-              aria-label="Administrar catálogo"
-              title="Administrar catálogo"
-              className="hidden"
-            >
-              <ShieldCheck size={19} />
-            </Link>
-
-            <button
-              onClick={() => setOpen(true)}
-              className="relative bg-copper text-white rounded-lg min-h-11 px-3 py-2 flex items-center gap-2 hover:bg-copper-bright transition-colors" aria-label={`Abrir mi pedido, ${count} productos`}
-            >
-              <ShoppingCart size={20} /><span className="hidden min-[390px]:inline text-sm font-semibold">Pedido</span>
-              {count > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-amber text-graphite text-[11px] font-bold rounded-full min-w-[19px] h-[19px] flex items-center justify-center px-1">
-                  {count}
-                </span>
-              )}
-            </button>
+          <div className="ml-auto flex items-center gap-2 sm:ml-0">
+            <a href={whatsappUrl} target="_blank" rel="noreferrer" className="hidden min-h-11 items-center gap-2 rounded-lg border border-slate-dark px-3 py-2 text-xs font-semibold text-white hover:border-copper lg:flex"><MessageCircle size={16} /> Cotizar</a>
+            <button onClick={() => setOpen(true)} className="relative flex min-h-11 items-center gap-2 rounded-lg bg-copper px-3 py-2 text-white transition-colors hover:bg-copper-bright" aria-label={`Abrir mi pedido, ${count} productos`}><ShoppingCart size={20} /><span className="hidden text-sm font-semibold min-[390px]:inline">Pedido</span>{count > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-amber px-1 text-[11px] font-bold text-graphite">{count}</span>}</button>
           </div>
         </div>
 
-        <form onSubmit={handleSearch} role="search" className="sm:hidden px-4 pb-3">
-          <label htmlFor="mobile-product-search" className="sr-only">Buscar productos por nombre o referencia</label>
-          <div className="flex gap-2">
-            <div className="flex items-center gap-2 flex-1 bg-white rounded-xl px-3 border-2 border-white focus-within:border-copper min-w-0">
-              <Search size={20} className="text-graphite shrink-0" aria-hidden="true" />
-              <input id="mobile-product-search" value={query} onChange={event => setQuery(event.target.value)}
-                type="search" placeholder="¿Qué producto necesitas?"
-                className="w-full min-w-0 h-12 text-base text-ink placeholder:text-muted outline-none" />
-            </div>
-            <button type="submit" className="min-h-12 px-4 bg-copper text-white font-semibold rounded-xl">Buscar</button>
-          </div>
-        </form>
-        <div className="livewire" />
+        <form onSubmit={handleSearch} role="search" className="px-4 pb-3 sm:hidden"><label htmlFor="mobile-product-search" className="sr-only">Buscar productos por nombre o referencia</label><div className="flex gap-2"><div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border-2 border-white bg-white px-3 focus-within:border-copper"><Search size={20} className="shrink-0 text-graphite" /><input id="mobile-product-search" value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="¿Qué producto necesitas?" className="h-12 w-full min-w-0 text-base text-ink outline-none placeholder:text-muted" /></div><button type="submit" className="min-h-12 rounded-xl bg-copper px-4 font-semibold text-white">Buscar</button></div></form>
       </header>
 
-      {/* Menú lateral móvil */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-50 flex"
-          onClick={() => setMenuOpen(false)}
-        >
-          <div
-            className="w-[340px] max-w-[90vw] bg-white h-full overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-4 border-b border-hair">
-              <span className="font-display font-bold">Menú</span>
-              <button
-                onClick={() => setMenuOpen(false)}
-                aria-label="Cerrar menú"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="px-4 pt-5 pb-3">
-              <p className="font-bold text-lg">¿Qué necesitas comprar?</p>
-              <p className="text-sm text-muted mt-1">Elige una categoría o busca por nombre.</p>
-            </div>
-
-            <div className="px-4 pt-4 pb-2 text-[10px] uppercase tracking-[.14em] font-mono text-muted">
-              Categorías
-            </div>
-            <Link href="/productos" onClick={() => setMenuOpen(false)} className="flex items-center justify-between px-4 min-h-14 py-3.5 border-b border-hair text-copper font-bold">
-              Ver todos los productos <ChevronRight size={18} />
-            </Link>
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/categorias/${c.slug}`}
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-between px-4 min-h-14 py-3.5 border-b border-hair hover:bg-paper transition-colors"
-              >
-                <span className="font-semibold text-sm">{c.name}</span>
-                <ChevronRight size={16} className="text-muted" />
-              </Link>
-            ))}
-            <Link href="/admin/login" onClick={() => setMenuOpen(false)}
-              className="block text-xs text-muted underline px-4 py-5 mt-6">
-              Acceso para administradores
-            </Link>
-          </div>
-        </div>
-      )}
+      {menuOpen && <div className="fixed inset-0 z-50 flex bg-black/50" onClick={() => setMenuOpen(false)}><div className="h-full w-[340px] max-w-[90vw] overflow-y-auto bg-white" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between border-b border-hair p-4"><span className="font-display font-bold">Comprar</span><button onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={20} /></button></div><div className="px-4 pb-3 pt-5"><p className="text-lg font-bold">¿Qué necesitas?</p><p className="mt-1 text-sm text-muted">Busca por referencia o entra por categoría.</p></div><Link href="/productos" onClick={() => setMenuOpen(false)} className="flex min-h-14 items-center justify-between border-b border-hair px-4 py-3.5 font-bold text-copper">Ver todos los productos <ChevronRight size={18} /></Link>{categories.map((category) => <Link key={category.id} href={`/categorias/${category.slug}`} onClick={() => setMenuOpen(false)} className="flex min-h-14 items-center justify-between border-b border-hair px-4 py-3.5 transition-colors hover:bg-paper"><span className="text-sm font-semibold">{category.name}</span><ChevronRight size={16} className="text-muted" /></Link>)}<a href={whatsappUrl} target="_blank" rel="noreferrer" className="mx-4 mt-6 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-green px-4 font-bold text-white"><MessageCircle size={18} /> Cotizar por WhatsApp</a><Link href="/admin/login" onClick={() => setMenuOpen(false)} className="mt-4 flex items-center gap-2 px-4 py-5 text-xs text-muted underline"><ShieldCheck size={14} /> Acceso administrativo</Link></div></div>}
     </>
   );
 }
