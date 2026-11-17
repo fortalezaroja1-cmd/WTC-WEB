@@ -279,22 +279,35 @@ function selectRecommendations(
   limit: number,
 ) {
   const cartProductIds = new Set(items.map(item => item.productId));
-  const categoryByProduct = new Map(catalog.map(product => [product.id, product.categoryId]));
-  const cartCategories = new Set(
-    items.map(item => categoryByProduct.get(item.productId)).filter((id): id is string => Boolean(id))
-  );
-  const focusCategory = focusProductId ? categoryByProduct.get(focusProductId) : undefined;
+  const priceByProduct = new Map(catalog.map(product => [product.id, product.price]));
+  const focusItem = focusProductId
+    ? items.find(item => item.productId === focusProductId)
+    : items.at(-1);
+  const referencePrice = focusItem?.price
+    ?? (focusProductId ? priceByProduct.get(focusProductId) : undefined)
+    ?? Math.max(0, ...items.map(item => item.price));
+
+  // Una venta cruzada debe sentirse como un adicional, no como una segunda compra grande.
+  // Para pedidos de alto valor usamos hasta 25 % del producto de referencia, con un techo
+  // de $50.000. Para compras pequeñas conservamos un piso de $15.000 para no dejar el
+  // bloque vacío y seguir ofreciendo accesorios útiles.
+  const addOnBudget = Math.max(15_000, Math.min(50_000, referencePrice * 0.25));
+
+  const isPreferredLowTicket = (product: CartRecommendation) => {
+    const name = product.name.toLocaleLowerCase("es");
+    return name.includes("bombillo") || name.includes("panel led") || name.includes("iluminacion");
+  };
 
   return catalog
     .filter(product => !cartProductIds.has(product.id) && product.stock > 0 && product.price > 0)
     .sort((a, b) => {
-      const score = (product: CartRecommendation) => {
-        if (focusCategory && product.categoryId === focusCategory) return 0;
-        if (cartCategories.has(product.categoryId)) return 1;
-        if (product.featured) return 2;
-        return 3;
-      };
-      return score(a) - score(b) || a.name.localeCompare(b.name, "es");
+      const budgetScore = (product: CartRecommendation) => product.price <= addOnBudget ? 0 : 1;
+      const preferredScore = (product: CartRecommendation) => isPreferredLowTicket(product) ? 0 : 1;
+      return budgetScore(a) - budgetScore(b)
+        || preferredScore(a) - preferredScore(b)
+        || a.price - b.price
+        || Number(b.featured) - Number(a.featured)
+        || a.name.localeCompare(b.name, "es");
     })
     .slice(0, limit);
 }
