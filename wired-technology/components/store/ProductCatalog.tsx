@@ -65,6 +65,15 @@ async function loadImageAsJpeg(url: string) {
   }
 }
 
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export function ProductCatalog({ products, initialQuery = "" }: Props) {
   const { addItem } = useCart();
   const [query, setQuery] = useState(initialQuery);
@@ -85,14 +94,13 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("es");
+    const needle = normalizeSearch(query);
     return products.filter((product) => {
       if (activeCategory !== "Todos" && product.category !== activeCategory) return false;
       if (!needle) return true;
-      return [product.name, product.sku, product.brand, product.category, product.description]
-        .join(" ")
-        .toLocaleLowerCase("es")
-        .includes(needle);
+      return normalizeSearch(
+        [product.name, product.sku, product.brand, product.category, product.description].join(" "),
+      ).includes(needle);
     });
   }, [products, query, activeCategory]);
 
