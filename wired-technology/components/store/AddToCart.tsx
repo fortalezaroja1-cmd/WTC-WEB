@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Plus, Minus, ArrowRight } from "lucide-react";
 import { useCart } from "./CartProvider";
-import { formatCOP } from "@/lib/utils";
+import { formatCOP, getDiscountPricing } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
 interface Variant {
@@ -32,6 +32,7 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
 
   const sel = hasVariants ? variants.find((v) => v.id === selId) : null;
   const curPrice = sel ? sel.price : (price || 0);
+  const offer = getDiscountPricing(curPrice);
   const curStock = sel ? sel.stock : (stock || 0);
   const curSku = sel ? sel.sku : productSku;
   const curImage = sel?.image || productImage;
@@ -68,9 +69,16 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
 
   return (
     <div>
-      <div className="flex items-baseline gap-2.5 mb-1.5">
-        <span className="font-display text-3xl font-bold text-copper">{formatCOP(curPrice)}</span>
-        <span className="text-sm text-muted">/ {productUnit}</span>
+      <div className="mb-1.5 rounded-2xl border border-copper/20 bg-[#FBF3EC] p-4">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted line-through decoration-alert/70">Antes {formatCOP(offer.original)}</span>
+          <span className="rounded-full bg-alert px-2.5 py-1 text-xs font-bold text-white">-{offer.discountPercent}%</span>
+        </div>
+        <div className="flex items-baseline gap-2.5">
+          <span className="font-display text-3xl font-bold text-copper">{formatCOP(offer.current)}</span>
+          <span className="text-sm text-muted">/ {productUnit}</span>
+        </div>
+        <p className="mt-1 text-sm font-bold text-green">Te ahorras {formatCOP(offer.savings)}</p>
       </div>
 
       <div className="mb-5">
@@ -124,3 +132,4 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
     </div>
   );
 }
+
