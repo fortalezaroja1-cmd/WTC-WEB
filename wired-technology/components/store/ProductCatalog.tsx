@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal, ShoppingCart } from "lucide-react";
-import { formatCOP } from "@/lib/utils";
+import { formatCOP, getDiscountPricing } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
 import { trackMetaEvent } from "@/lib/meta-events";
 
@@ -265,7 +265,9 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
           <div className="rounded-xl border border-hair bg-card py-16 px-4 text-center text-base text-muted">No encontramos productos con esa búsqueda. Intenta escribir un nombre más corto o una referencia.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product) => {
+              const offer = getDiscountPricing(product.price);
+              return (
               <article key={product.id} className="group overflow-hidden rounded-2xl border border-hair bg-card shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
                 <Link href={`/productos/${product.slug}`} className="block">
                   <div className="relative h-[220px] sm:h-[280px] lg:h-[330px] bg-white border-b border-hair overflow-hidden">
@@ -276,6 +278,7 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                     )}
                     <span className="absolute left-4 top-4 rounded-md bg-graphite/90 px-2.5 py-1 font-mono text-[10px] text-white shadow-sm">{product.category}</span>
                     <span className="absolute right-4 top-4 rounded-md border border-hair bg-white/95 px-2.5 py-1 font-mono text-[10px] text-slate-dark shadow-sm">{product.brand}</span>
+                    <span className="absolute left-4 bottom-4 rounded-full bg-alert px-3 py-1 text-xs font-bold text-white shadow-sm">-{offer.discountPercent}%</span>
                   </div>
 
                   <div className="px-5 pt-5">
@@ -289,7 +292,9 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div>
                       <div className="text-xs text-muted mb-1">{product.hasVariants ? "Precio desde" : `Precio por ${product.unit}`}</div>
-                      <div className="font-display text-2xl font-bold text-copper">{formatCOP(product.price)}</div>
+                      <div className="text-sm text-muted line-through decoration-alert/70">{formatCOP(offer.original)}</div>
+                      <div className="font-display text-2xl font-bold text-copper">{formatCOP(offer.current)}</div>
+                      <div className="mt-1 text-xs font-bold text-green">Te ahorras {formatCOP(offer.savings)}</div>
                     </div>
                     <span className={`text-sm font-semibold ${product.totalStock <= 0 ? "text-alert" : "text-green"}`}>
                       {product.totalStock <= 0 ? "Agotado" : "Disponible"}
@@ -308,10 +313,12 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                   )}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
     </>
   );
 }
+
