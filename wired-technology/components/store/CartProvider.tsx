@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
 import { formatCOP } from "@/lib/utils";
@@ -16,6 +16,19 @@ export interface CartItem {
   slug: string;
 }
 
+export interface CartRecommendation {
+  id: string;
+  categoryId: string;
+  name: string;
+  sku: string;
+  slug: string;
+  price: number;
+  image: string | null;
+  hasVariants: boolean;
+  stock: number;
+  featured: boolean;
+}
+
 interface CartCtx {
   items: CartItem[];
   addItem: (item: CartItem) => void;
@@ -24,6 +37,7 @@ interface CartCtx {
   clearCart: () => void;
   open: boolean;
   setOpen: (v: boolean) => void;
+  recommendations: CartRecommendation[];
 }
 
 const Ctx = createContext<CartCtx | null>(null);
@@ -33,10 +47,17 @@ export function useCart() {
   return value;
 }
 
-export function CartProvider({ children }: { children: ReactNode; whatsapp: string }) {
+export function CartProvider({
+  children,
+  recommendations,
+}: {
+  children: ReactNode;
+  whatsapp: string;
+  recommendations: CartRecommendation[];
+}) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ name: string; productId: string } | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -67,7 +88,7 @@ export function CartProvider({ children }: { children: ReactNode; whatsapp: stri
 
   useEffect(() => {
     if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(""), 5200);
+    const timeout = window.setTimeout(() => setNotice(null), 10000);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -82,8 +103,8 @@ export function CartProvider({ children }: { children: ReactNode; whatsapp: stri
         i === index ? { ...existing, qty: existing.qty + item.qty } : existing
       );
     });
-    // No abrimos el carrito: dejamos que el cliente continúe viendo productos.
-    setNotice(item.name);
+    // No abrimos el carrito: mostramos venta cruzada sin sacar al cliente del catálogo.
+    setNotice({ name: item.name, productId: item.productId });
   };
   const removeItem = (idx: number) => setItems(previous => previous.filter((_, i) => i !== idx));
   const updateQty = (idx: number, delta: number) => {
@@ -94,24 +115,42 @@ export function CartProvider({ children }: { children: ReactNode; whatsapp: stri
   };
   const clearCart = () => setItems([]);
 
+  const noticeRecommendations = useMemo(
+    () => selectRecommendations(items, recommendations, notice?.productId ?? null, 2),
+    [items, recommendations, notice]
+  );
+
   return (
-    <Ctx.Provider value={{ items, addItem, removeItem, updateQty, clearCart, open, setOpen }}>
+    <Ctx.Provider value={{ items, addItem, removeItem, updateQty, clearCart, open, setOpen, recommendations }}>
       {children}
       {notice && (
-        <div role="status" aria-live="polite" className="fixed top-[126px] sm:top-[76px] left-3 right-3 sm:left-auto sm:right-6 z-[65] sm:w-[390px] bg-white border-2 border-green rounded-2xl p-3 shadow-2xl">
+        <div role="status" aria-live="polite" className="fixed top-[126px] sm:top-[76px] left-3 right-3 sm:left-auto sm:right-6 z-[65] sm:w-[410px] max-h-[calc(100dvh-140px)] overflow-y-auto bg-white border-2 border-green rounded-2xl p-3 shadow-2xl">
           <div className="flex gap-2.5 items-start">
             <CheckCircle2 className="text-green shrink-0 mt-0.5" size={25} aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="text-base font-bold text-ink">¡Producto agregado!</p>
-              <p className="text-sm text-slate-dark line-clamp-2 mt-0.5">{notice}</p>
+              <p className="text-sm text-slate-dark line-clamp-2 mt-0.5">{notice.name}</p>
             </div>
-            <button type="button" onClick={() => setNotice("")} aria-label="Cerrar aviso" className="min-w-11 min-h-11 flex items-center justify-center rounded-lg"><X size={20}/></button>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Cerrar aviso" className="min-w-11 min-h-11 flex items-center justify-center rounded-lg"><X size={20}/></button>
           </div>
+
+          {noticeRecommendations.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-hair">
+              <p className="font-bold text-sm text-ink">¿Quieres agregar algo más?</p>
+              <p className="text-xs text-muted mt-0.5 mb-2">Completa tu pedido antes de continuar.</p>
+              <div className="space-y-2">
+                {noticeRecommendations.map(product => (
+                  <RecommendationCard key={product.id} product={product} compact />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2 mt-3">
-            <button type="button" onClick={() => setNotice("")} className="min-h-12 rounded-lg border border-hair font-semibold text-sm">
+            <button type="button" onClick={() => setNotice(null)} className="min-h-12 rounded-lg border border-hair font-semibold text-sm">
               Seguir comprando
             </button>
-            <button type="button" onClick={() => { setNotice(""); setOpen(true); }} className="min-h-12 rounded-lg bg-copper text-white font-semibold text-sm">
+            <button type="button" onClick={() => { setNotice(null); setOpen(true); }} className="min-h-12 rounded-lg bg-copper text-white font-semibold text-sm">
               Ver mi pedido
             </button>
           </div>
@@ -123,8 +162,13 @@ export function CartProvider({ children }: { children: ReactNode; whatsapp: stri
 }
 
 function CartDrawer() {
-  const { items, removeItem, updateQty, setOpen } = useCart();
+  const { items, removeItem, updateQty, setOpen, recommendations } = useCart();
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const drawerRecommendations = useMemo(
+    () => selectRecommendations(items, recommendations, items.at(-1)?.productId ?? null, 3),
+    [items, recommendations]
+  );
+
   return (
     <div className="fixed inset-0 z-[80] bg-black/60 flex items-end sm:items-stretch sm:justify-end" onClick={() => setOpen(false)}>
       <section role="dialog" aria-modal="true" aria-labelledby="cart-title"
@@ -161,6 +205,18 @@ function CartDrawer() {
               </div>
             </div>
           ))}
+
+          {items.length > 0 && drawerRecommendations.length > 0 && (
+            <section className="py-4" aria-labelledby="cart-recommendations-title">
+              <h3 id="cart-recommendations-title" className="font-display font-bold text-lg">Agrega algo más a tu pedido</h3>
+              <p className="text-sm text-muted mt-1 mb-3">Productos disponibles relacionados con tu compra.</p>
+              <div className="space-y-2">
+                {drawerRecommendations.map(product => (
+                  <RecommendationCard key={product.id} product={product} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
         <footer className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-hair bg-white">
           {items.length > 0 && <>
@@ -177,4 +233,68 @@ function CartDrawer() {
       </section>
     </div>
   );
+}
+
+function RecommendationCard({ product, compact = false }: { product: CartRecommendation; compact?: boolean }) {
+  const { addItem, setOpen } = useCart();
+  const addRecommendation = () => {
+    addItem({
+      productId: product.id,
+      variantId: null,
+      name: product.name,
+      sku: product.sku,
+      price: product.price,
+      qty: 1,
+      image: product.image,
+      slug: product.slug,
+    });
+  };
+
+  return (
+    <article className={`flex items-center gap-3 rounded-xl border border-hair bg-paper/50 ${compact ? "p-2" : "p-3"}`}>
+      <div className={`${compact ? "h-12 w-12" : "h-16 w-16"} shrink-0 rounded-lg bg-white overflow-hidden flex items-center justify-center`}>
+        {product.image ? <img src={product.image} alt="" className="h-full w-full object-contain" /> : <ShoppingCart size={20} className="text-copper" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`${compact ? "text-xs" : "text-sm"} font-semibold leading-snug line-clamp-2`}>{product.name}</p>
+        <p className="text-xs font-bold text-copper mt-1">Desde {formatCOP(product.price)}</p>
+      </div>
+      {product.hasVariants ? (
+        <Link href={`/productos/${product.slug}`} onClick={() => setOpen(false)} className="min-h-11 px-3 rounded-lg border border-copper text-copper text-xs font-bold flex items-center justify-center text-center">
+          Elegir opción
+        </Link>
+      ) : (
+        <button type="button" onClick={addRecommendation} className="min-h-11 px-3 rounded-lg bg-copper text-white text-xs font-bold">
+          Agregar
+        </button>
+      )}
+    </article>
+  );
+}
+
+function selectRecommendations(
+  items: CartItem[],
+  catalog: CartRecommendation[],
+  focusProductId: string | null,
+  limit: number,
+) {
+  const cartProductIds = new Set(items.map(item => item.productId));
+  const categoryByProduct = new Map(catalog.map(product => [product.id, product.categoryId]));
+  const cartCategories = new Set(
+    items.map(item => categoryByProduct.get(item.productId)).filter((id): id is string => Boolean(id))
+  );
+  const focusCategory = focusProductId ? categoryByProduct.get(focusProductId) : undefined;
+
+  return catalog
+    .filter(product => !cartProductIds.has(product.id) && product.stock > 0 && product.price > 0)
+    .sort((a, b) => {
+      const score = (product: CartRecommendation) => {
+        if (focusCategory && product.categoryId === focusCategory) return 0;
+        if (cartCategories.has(product.categoryId)) return 1;
+        if (product.featured) return 2;
+        return 3;
+      };
+      return score(a) - score(b) || a.name.localeCompare(b.name, "es");
+    })
+    .slice(0, limit);
 }
