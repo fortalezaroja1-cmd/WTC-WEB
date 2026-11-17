@@ -11,6 +11,7 @@ type OrderMeta = {
   internalNote: string;
   stockValidated: boolean;
   inventoryApplied: boolean;
+  shippingQuoted: boolean;
 };
 
 const DEFAULT_META: OrderMeta = {
@@ -21,6 +22,7 @@ const DEFAULT_META: OrderMeta = {
   internalNote: "",
   stockValidated: false,
   inventoryApplied: false,
+  shippingQuoted: false,
 };
 
 function parseNotes(notes: string | null) {
@@ -97,6 +99,7 @@ export async function PUT(req: NextRequest) {
       assignedSellerId,
       assignedSellerName,
       internalNote,
+      shipping,
       action,
     } = body;
 
@@ -343,6 +346,16 @@ export async function PUT(req: NextRequest) {
     }
     if (internalNote !== undefined)
       meta.internalNote = String(internalNote || "");
+    if (shipping !== undefined) {
+      const quotedShipping = Number(shipping);
+      if (!Number.isFinite(quotedShipping) || quotedShipping < 0 || quotedShipping > 100000000) {
+        return NextResponse.json({ error: "Valor de envío inválido" }, { status: 400 });
+      }
+      data.shipping = quotedShipping;
+      data.total = Number(current.subtotal) + quotedShipping;
+      meta.shippingQuoted = true;
+      historyEntries.push(`Envío cotizado: $${Math.round(quotedShipping).toLocaleString("es-CO")}`);
+    }
 
     if (shipStatus === "CANCELLED" && meta.inventoryApplied) {
       const cancelled = await prisma.$transaction(async (tx) => {

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { formatCOP, PAY_LABELS, SHIP_LABELS, SHIP_STATUSES, waLink } from "@/lib/utils";
-import { X, MessageCircle, PackageCheck, CheckCircle2, AlertTriangle, UserRound, Tag } from "lucide-react";
+import { X, MessageCircle, PackageCheck, CheckCircle2, AlertTriangle, UserRound, Tag, CreditCard, Copy } from "lucide-react";
 
 function shippingPending(order: any) {
   return order?.workflow?.shippingQuoted === false;
@@ -14,6 +14,7 @@ export default function PedidosAdmin() {
   const [actionError, setActionError] = useState("");
   const [availability, setAvailability] = useState<any[] | null>(null);
   const [busy, setBusy] = useState("");
+  const [paymentLink, setPaymentLink] = useState("");
 
   const loadOrders = async () => {
     const res = await fetch("/api/admin/orders", { cache: "no-store" });
@@ -50,8 +51,30 @@ export default function PedidosAdmin() {
     setSelected(order.id);
     setActionError("");
     setAvailability(null);
+    setPaymentLink(order.iionCollectUrl || "");
     if (order.shipStatus === "PENDING_PAYMENT") {
       try { await requestUpdate(order.id, { shipStatus: "READY" }); } catch {}
+    }
+  };
+
+  const generatePayment = async () => {
+    if (!cur) return;
+    setBusy("payment");
+    setActionError("");
+    try {
+      const response = await fetch("/api/admin/iion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: cur.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo generar el enlace");
+      setPaymentLink(result.collectUrl);
+      await loadOrders();
+    } catch (error: any) {
+      setActionError(error.message);
+    } finally {
+      setBusy("");
     }
   };
 
@@ -236,6 +259,29 @@ export default function PedidosAdmin() {
                   <div className="flex justify-between font-bold pt-2 border-t border-hair"><span>{shippingPending(cur) ? "Total final" : "Total"}</span><span className="font-display text-copper">{shippingPending(cur) ? "Por confirmar" : formatCOP(Number(cur.total))}</span></div>
                 </div>
 
+                <div className="mt-4 rounded-xl border border-hair bg-paper p-3">
+                  <label className="text-xs font-semibold text-slate-dark block mb-1">Valor del envío confirmado</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      defaultValue={shippingPending(cur) ? "" : Number(cur.shipping)}
+                      placeholder="Ej. 18000"
+                      id={`shipping-${cur.id}`}
+                      className="min-w-0 flex-1 border border-hair rounded-lg px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById(`shipping-${cur.id}`) as HTMLInputElement | null;
+                        requestUpdate(cur.id, { shipping: Number(input?.value || 0) }).catch((err) => setActionError(err.message));
+                      }}
+                      className="border border-hair rounded-lg px-3 text-xs font-semibold"
+                    >Guardar</button>
+                  </div>
+                </div>
+
                 {availability && (
                   <div className="mt-3 bg-paper rounded-lg p-3 text-xs">
                     {availability.map((x: any, i: number) => (
@@ -301,6 +347,28 @@ export default function PedidosAdmin() {
                     className="w-full border border-hair rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-copper"
                   />
                 </div>
+              </section>
+
+              <section className="rounded-xl border border-hair p-4">
+                <div className="font-mono text-[11px] tracking-[.16em] uppercase text-copper font-semibold mb-2">Cobro con iion pay</div>
+                <p className="text-xs text-muted mb-3">Genera el enlace únicamente después de confirmar stock y valor del envío.</p>
+                <button
+                  type="button"
+                  onClick={generatePayment}
+                  disabled={!!busy || shippingPending(cur) || !cur.workflow?.inventoryApplied || cur.paymentStatus === "APPROVED"}
+                  className="w-full bg-graphite text-white rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40"
+                >
+                  <CreditCard size={16} /> {busy === "payment" ? "Generando..." : paymentLink ? "Renovar / ver enlace" : "Generar enlace de pago"}
+                </button>
+                {paymentLink && (
+                  <div className="mt-3 space-y-2">
+                    <a href={paymentLink} target="_blank" rel="noreferrer" className="block text-xs text-copper underline break-all">{paymentLink}</a>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => navigator.clipboard.writeText(paymentLink)} className="border border-hair rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1"><Copy size={14}/> Copiar</button>
+                      {cur.customer?.phone && <a href={waLink(cur.customer.phone, `Hola ${cur.customer?.name || ""}, este es el enlace seguro para pagar el pedido ${cur.number}: ${paymentLink}`)} target="_blank" rel="noreferrer" className="bg-green text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1"><MessageCircle size={14}/> Enviar</a>}
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section>

@@ -129,6 +129,10 @@ model Order {
   shipStatus    ShipStatus    @default(PENDING_PAYMENT)
   paymentMethod String?
   mpPaymentId   String?
+  paymentProvider String?
+  iionPaymentId  String?       @unique
+  iionCollectUrl String?
+  iionExpiresAt  DateTime?
   subtotal      Decimal       @db.Decimal(12, 2)
   shipping      Decimal       @db.Decimal(12, 2) @default(0)
   total         Decimal       @db.Decimal(12, 2)
@@ -140,6 +144,17 @@ model Order {
   customer      Customer?     @relation(fields: [customerId], references: [id])
   items         OrderItem[]
   history       OrderHistory[]
+}
+
+model PaymentWebhookEvent {
+  id        String   @id
+  event     String
+  orderId   String?
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 enum PaymentStatus {
