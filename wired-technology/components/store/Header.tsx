@@ -14,13 +14,13 @@ interface Category {
   subcategories: { id: string; name: string; slug: string }[];
 }
 
-export function StoreHeader({ categories, tagline }: { categories: Category[]; storeName: string; tagline: string }) {
+export function StoreHeader({ categories, tagline, whatsapp }: { categories: Category[]; storeName: string; tagline: string; whatsapp: string }) {
   const router = useRouter();
   const { items, setOpen } = useCart();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const count = items.reduce((sum, item) => sum + item.qty, 0);
-  const whatsappUrl = `https://wa.me/573143506623?text=${encodeURIComponent("Hola Wired Technology, necesito cotizar una referencia.")}`;
+  const whatsappUrl = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Hola Wired Technology, necesito cotizar una referencia.")}`;
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
