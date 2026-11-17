@@ -8,6 +8,18 @@ export function formatCOP(n: number | string | null | undefined): string {
   return "$ " + new Intl.NumberFormat("es-CO").format(Math.round(Number(n) || 0));
 }
 
+export function getDiscountPricing(currentPrice: number | string | null | undefined) {
+  const current = Math.max(0, Math.round(Number(currentPrice) || 0));
+  const original = current > 0 ? Math.round(current / 0.7) : 0;
+
+  return {
+    current,
+    original,
+    savings: Math.max(0, original - current),
+    discountPercent: 30,
+  };
+}
+
 export function generateOrderNumber(): string {
   const num = Math.floor(1000 + Math.random() * 9000);
   return `WT-${num}`;
@@ -55,3 +67,4 @@ export const PAY_LABELS: Record<string, string> = {
   REJECTED: "Pago rechazado",
   REFUNDED: "Reembolsado",
 };
+
