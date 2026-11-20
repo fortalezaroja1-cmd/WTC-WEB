@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Package, Plus, Search } from "lucide-react";
-import { useCart } from "@/components/store/CartProvider";
+import type { CartItem, CartRecommendation } from "@/components/store/CartProvider";
 import { formatCOP, getDiscountPricing } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
@@ -11,8 +11,13 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
 }
 
-export function CartProductSearch({ onNavigate }: { onNavigate?: () => void }) {
-  const { items, addItem, recommendations } = useCart();
+export function CartProductSearch({ items, recommendations, addItem, onNavigate }: {
+  items: CartItem[];
+  recommendations: CartRecommendation[];
+  addItem: (item: CartItem) => void;
+  onNavigate?: () => void;
+}) {
+  const searchId = useId();
   const [search, setSearch] = useState("");
 
   const matches = useMemo(() => {
@@ -55,11 +60,11 @@ export function CartProductSearch({ onNavigate }: { onNavigate?: () => void }) {
     <section className="rounded-xl border border-copper/30 bg-[#FFF9F3] p-3 sm:p-4" aria-label="Agregar productos al pedido">
       <p className="text-sm font-bold text-ink">Busca y agrega otros productos</p>
       <p className="mt-1 text-xs text-muted">Tu pedido y sus cantidades se conservan mientras buscas.</p>
-      <label htmlFor="cart-product-search" className="sr-only">Buscar producto o referencia</label>
+      <label htmlFor={searchId} className="sr-only">Buscar producto o referencia</label>
       <div className="relative mt-3">
         <Search size={19} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true" />
         <input
-          id="cart-product-search"
+          id={searchId}
           type="search"
           value={search}
           onChange={event => setSearch(event.target.value)}
