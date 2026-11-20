@@ -44,9 +44,11 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   const recommendations: CartRecommendation[] = recommendationProducts.map(product => {
     const hasVariants = product.variants.length > 0;
+    // El precio publicado ya tiene el 30 % aplicado. Todas las superficies de
+    // compra deben usar el mismo valor para evitar discrepancias en el carrito.
     const prices = hasVariants
-      ? product.variants.map(variant => Number(variant.promoPrice ?? variant.price))
-      : [Number(product.promoPrice ?? product.price ?? 0)];
+      ? product.variants.map(variant => Number(variant.price))
+      : [Number(product.price ?? 0)];
     const stock = hasVariants
       ? product.variants.reduce((total, variant) => total + Math.max(0, variant.stock), 0)
       : Math.max(0, product.stock);
