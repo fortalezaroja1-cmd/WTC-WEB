@@ -2,11 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useCart, type CartItem } from "@/components/store/CartProvider";
-import { formatCOP, waLink } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, waLink } from "@/lib/utils";
+import { CartProductSearch } from "@/components/store/CartProductSearch";
 import { META_CONSENT_ACCEPTED_EVENT, trackMetaEvent } from "@/lib/meta-events";
 import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, MessageCircle, Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 
-const WHATSAPP = "573143506623";
 const TEMPLATES = {
   pedido: { label: "Pedido de productos", intro: "Hola Wired Technology, quiero solicitar el siguiente pedido:" },
   cotizacion: { label: "Solicitar cotización", intro: "Hola Wired Technology, quisiera recibir una cotización de estos productos:" },
@@ -17,7 +17,8 @@ type TemplateKey = keyof typeof TEMPLATES;
 const INPUT = "w-full min-h-12 border border-hair rounded-xl px-3 py-2.5 text-base focus:outline-none focus:border-copper";
 
 export default function CheckoutPage() {
-  const { items, updateQty, removeItem } = useCart();
+  const { items, addItem, updateQty, removeItem, recommendations, whatsapp } = useCart();
+  const [showProductSearch, setShowProductSearch] = useState(false);
   const [sequence, setSequence] = useState<string[]>([]);
   const checkoutTracked = useRef(false);
   const [mode, setMode] = useState<"automatico" | "manual">("automatico");
@@ -38,6 +39,8 @@ export default function CheckoutPage() {
     return [...items].sort((a, b) => (index.get(a.productId + ":" + (a.variantId || "")) ?? 999) - (index.get(b.productId + ":" + (b.variantId || "")) ?? 999));
   }, [items, sequence]);
   const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const originalTotal = items.reduce((sum, i) => sum + getDiscountPricing(i.price).original * i.qty, 0);
+  const discountSavings = Math.max(0, originalTotal - subtotal);
   useEffect(() => {
     if (!items.length || checkoutTracked.current) return;
     const trackCheckout = () => {
@@ -154,6 +157,11 @@ export default function CheckoutPage() {
           <section className="bg-card border border-hair rounded-xl p-4 sm:p-5">
             <h2 className="font-display text-lg font-bold mb-1">2. Ordena los productos</h2>
             <p className="text-xs text-muted mb-4">Modifica cantidades, elimina productos o cambia su orden con las flechas.</p>
+            <button type="button" aria-expanded={showProductSearch} onClick={() => setShowProductSearch(value => !value)}
+              className="mb-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-copper bg-[#FFF9F3] px-4 text-sm font-bold text-copper">
+              <Plus size={18} aria-hidden="true" /> {showProductSearch ? "Ocultar búsqueda de productos" : "Agregar más productos a este pedido"}
+            </button>
+            {showProductSearch && <div className="mb-4"><CartProductSearch items={items} recommendations={recommendations} addItem={addItem} /></div>}
             {ordered.map((it, i) => {
               const originalIndex = items.findIndex(x => x.productId === it.productId && x.variantId === it.variantId);
               return <div key={it.productId + ":" + it.variantId} className="flex items-center gap-3 py-3 border-b border-hair">
@@ -166,7 +174,9 @@ export default function CheckoutPage() {
         </div>
         <aside className="bg-white border border-hair rounded-xl p-4 sm:p-5 lg:sticky lg:top-24">
           <h2 className="font-display text-lg font-bold mb-3">3. Confirmación por WhatsApp</h2>
-          <div className="flex justify-between text-sm border-b border-hair pb-3"><span>Subtotal de productos</span><strong>{formatCOP(subtotal)}</strong></div>
+          <div className="flex justify-between text-sm text-muted pb-1"><span>Precio antes del descuento</span><span className="line-through">{formatCOP(originalTotal)}</span></div>
+          <div className="flex justify-between text-sm text-green pb-2"><span>Ahorro aplicado (30%)</span><strong>-{formatCOP(discountSavings)}</strong></div>
+          <div className="flex justify-between text-sm border-b border-hair pb-3"><span>Total de productos</span><strong>{formatCOP(subtotal)}</strong></div>
           <div className="flex justify-between text-sm py-3"><span>Envío</span><span className="text-copper font-semibold">Por cotizar</span></div>
           <p className="text-xs text-muted mb-3">Revisa el mensaje que enviaremos a WhatsApp. Wired confirmará existencias, costos y fecha antes de procesar el pedido.</p>
           <details className="bg-paper border border-hair rounded-lg p-3">
@@ -176,7 +186,7 @@ export default function CheckoutPage() {
           {!valid && <p role="status" className="mt-3 text-sm text-alert font-medium">
             {mode === "manual" ? "Escribe el mensaje que quieres enviar." : "Completa nombre, teléfono, ciudad y dirección si pides domicilio."}
           </p>}
-          {valid ? <a href={waLink(WHATSAPP, message)} target="_blank" rel="noopener noreferrer" onClick={recordContact}
+          {valid ? <a href={waLink(whatsapp, message)} target="_blank" rel="noopener noreferrer" onClick={recordContact}
             className="mt-4 w-full min-h-14 bg-green text-white font-bold text-base rounded-xl px-3 flex items-center justify-center gap-2 text-center">
             <MessageCircle size={20} aria-hidden="true" /> Enviar pedido a WhatsApp
           </a> : <button type="button" disabled className="mt-4 w-full min-h-14 bg-paper border border-hair text-muted font-bold text-base rounded-xl px-3 cursor-not-allowed">
