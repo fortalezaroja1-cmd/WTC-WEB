@@ -33,7 +33,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
         variants: {
           where: { active: true },
           orderBy: { order: "asc" },
-          select: { price: true, promoPrice: true, stock: true },
+          select: { id: true, name: true, sku: true, price: true, stock: true, image: true },
         },
       },
     }),
@@ -64,6 +64,14 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       hasVariants,
       stock,
       featured: product.featured,
+      variants: product.variants.map(variant => ({
+        id: variant.id,
+        name: variant.name,
+        sku: variant.sku,
+        price: Number(variant.price),
+        stock: Math.max(0, variant.stock),
+        image: variant.image,
+      })),
     };
   });
 
