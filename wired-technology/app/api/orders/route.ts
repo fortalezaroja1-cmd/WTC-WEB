@@ -103,11 +103,18 @@ export async function POST(req: NextRequest) {
     });
     const subtotal = validatedItems.reduce((sum, item) => sum + item.total, 0);
 
-    // Los pedidos armados por el cliente nunca presumen envío gratis.
-    // Hasta que logística/Skydropx cotice el flete, shipping se mantiene en 0
-    // únicamente como valor técnico y shippingQuoted=false define su significado real.
-    const shipping = 0;
-    const total = subtotal;
+    const settings = await prisma.siteSetting.findMany({
+      where: { key: { in: ["shippingCost", "freeShipFrom"] } },
+    });
+    const setting = new Map(settings.map(row => [row.key, Number(row.value)]));
+    const configuredShipping = setting.get("shippingCost") || 0;
+    const freeShipFrom = setting.get("freeShipFrom") || 0;
+    const pickup = fulfillment === "PICKUP";
+    const hasDeliveryRate = Number.isFinite(configuredShipping) && configuredShipping > 0;
+    const freeDelivery = !pickup && freeShipFrom > 0 && subtotal >= freeShipFrom;
+    const shippingQuoted = pickup || freeDelivery || hasDeliveryRate;
+    const shipping = pickup || freeDelivery ? 0 : hasDeliveryRate ? configuredShipping : 0;
+    const total = subtotal + shipping;
 
     // Idempotencia: si el navegador reintenta exactamente la misma solicitud, devolvemos la orden ya creada.
     if (requestId) {
@@ -116,7 +123,19 @@ export async function POST(req: NextRequest) {
         select: { id: true, number: true },
       });
       if (existingOrder) {
-        return NextResponse.json({ orderNumber: existingOrder.number, orderId: existingOrder.id, duplicate: true, subtotal });
+        const duplicate = await prisma.order.findUnique({ where: { id: existingOrder.id } });
+        const duplicateMeta = duplicate?.notes?.match(/\[WT_META\]([\s\S]*?)\[\/WT_META\]/)?.[1];
+        let duplicateShippingQuoted = false;
+        try { duplicateShippingQuoted = JSON.parse(duplicateMeta || "{}").shippingQuoted === true; } catch {}
+        return NextResponse.json({
+          orderNumber: existingOrder.number,
+          orderId: existingOrder.id,
+          duplicate: true,
+          subtotal: Number(duplicate?.subtotal || subtotal),
+          shipping: Number(duplicate?.shipping || 0),
+          total: Number(duplicate?.total || subtotal),
+          paymentReady: duplicateShippingQuoted,
+        });
       }
     }
 
@@ -166,9 +185,9 @@ export async function POST(req: NextRequest) {
         assignedSellerId: null,
         assignedSellerName: null,
         internalNote: "",
-        stockValidated: false,
+        stockValidated: true,
         inventoryApplied: false,
-        shippingQuoted: false,
+        shippingQuoted,
         fulfillment,
         paymentChoice,
       };
@@ -199,16 +218,17 @@ export async function POST(req: NextRequest) {
               variantId: it.variantId || null,
             })),
           },
-          history: {
-            create: { action: `Solicitud web · Origen: ${origin} · Envío por cotizar · Pago ${paymentMethod}`, actor: "cliente" },
-          },
+          history: { create: {
+            action: `Solicitud web · Origen: ${origin} · ${shippingQuoted ? `Envío definido $${Math.round(shipping).toLocaleString("es-CO")}` : "Envío por cotizar"} · Pago ${paymentMethod}`,
+            actor: "cliente",
+          } },
         },
       });
 
       await tx.notification.create({
         data: {
           type: "order",
-          message: `Nuevo pedido ${orderNumber} · Productos $${Math.round(subtotal).toLocaleString("es-CO")} + envío por cotizar`,
+          message: `Nuevo pedido ${orderNumber} · Total ${shippingQuoted ? `$${Math.round(total).toLocaleString("es-CO")}` : `$${Math.round(subtotal).toLocaleString("es-CO")} + envío por cotizar`}`,
         },
       });
 
@@ -221,7 +241,15 @@ export async function POST(req: NextRequest) {
       console.error("[CRM_STAGE_SYNC] No se pudo sincronizar pedido nuevo", syncError);
     }
 
-    return NextResponse.json({ orderNumber: result.number, orderId: result.id, shippingQuoted: false, subtotal });
+    return NextResponse.json({
+      orderNumber: result.number,
+      orderId: result.id,
+      shippingQuoted,
+      paymentReady: shippingQuoted,
+      subtotal,
+      shipping,
+      total,
+    });
   } catch (error: any) {
     if (error?.message === "INSUFFICIENT_STOCK") {
       return NextResponse.json({ error: "La disponibilidad cambió. Revisa las cantidades e inténtalo de nuevo." }, { status: 409 });

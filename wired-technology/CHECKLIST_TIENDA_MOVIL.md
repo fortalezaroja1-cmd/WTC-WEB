@@ -1,5 +1,5 @@
 # Wired Technology — Checklist de tienda móvil y venta asistida
-Actualizado: 2026-10-09
+Actualizado: 2026-11-20
 Proyecto: wired-technology (NO modificar wired-crm)
 URL: https://catalogo.wtgy.online/
 
@@ -13,7 +13,8 @@ URL: https://catalogo.wtgy.online/
 - [x] Botones de menú y carrito con mayor zona táctil.
 - [x] Portada con mensaje de compra más sencillo y acciones principales grandes.
 - [x] Tarjetas de productos con textos legibles y botón "Ver producto y comprar".
-- [ ] Auditar tamaños de letra y contraste en todas las pantallas.
+- [x] Nueva paleta de alto contraste: grafito, crema y naranja de acción.
+- [ ] Auditar tamaños de letra y contraste en las pantallas administrativas.
 - [ ] Probar navegación en pantallas de 320, 375 y 430 px, Android e iPhone.
 - [ ] Corregir elementos que se superpongan con Paula o el carrito.
 - [ ] Hacer pruebas reales con clientes mayores y con poca experiencia digital.
@@ -41,8 +42,14 @@ URL: https://catalogo.wtgy.online/
 - [x] Fecha solicitada (siempre sujeta a confirmación).
 - [x] Vista previa con productos, cantidades y subtotal.
 - [x] Salida final a WhatsApp de ventas.
-- [ ] Simplificar el formulario en móvil (pedir datos por etapas y solo los indispensables).
-- [ ] Añadir identificador de solicitud y registro persistente del pedido, para seguimiento administrativo.
+- [x] Checkout simplificado en una sola pantalla, con una acción principal.
+- [x] Datos opcionales separados y productos contraídos para reducir carga visual.
+- [x] Identificador idempotente y registro persistente del pedido.
+- [x] Precios y existencias validados nuevamente en el servidor.
+- [x] Iion Pay como pago principal, con redirección real cuando el total está definido.
+- [x] PSE y transferencia bancaria visibles como medios habilitados actualmente.
+- [x] Nuevos medios habilitados por Iion aparecen sin cambiar el código.
+- [ ] Completar cotización automática de envío por ciudad/transportadora; mientras tanto se usa la tarifa configurada en el panel.
 - [ ] Probar apertura de WhatsApp en Android, iOS y ordenador.
 - [ ] Comprobar que no se pierdan productos si WhatsApp no abre o el cliente regresa.
 - [ ] No marcar automáticamente como confirmado lo que solo se envió por WhatsApp.
