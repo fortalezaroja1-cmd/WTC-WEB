@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
-import { formatCOP } from "@/lib/utils";
+import { formatCOP, getDiscountPricing } from "@/lib/utils";
+import { CartProductSearch } from "@/components/store/CartProductSearch";
 
 export interface CartItem {
   productId: string;
@@ -27,6 +28,7 @@ export interface CartRecommendation {
   hasVariants: boolean;
   stock: number;
   featured: boolean;
+  variants: Array<{ id: string; name: string; sku: string; price: number; stock: number; image: string | null }>;
 }
 
 interface CartCtx {
@@ -38,6 +40,7 @@ interface CartCtx {
   open: boolean;
   setOpen: (v: boolean) => void;
   recommendations: CartRecommendation[];
+  whatsapp: string;
 }
 
 const Ctx = createContext<CartCtx | null>(null);
@@ -50,6 +53,7 @@ export function useCart() {
 export function CartProvider({
   children,
   recommendations,
+  whatsapp,
 }: {
   children: ReactNode;
   whatsapp: string;
@@ -104,7 +108,8 @@ export function CartProvider({
       );
     });
     // No abrimos el carrito: mostramos venta cruzada sin sacar al cliente del catálogo.
-    setNotice({ name: item.name, productId: item.productId });
+    if (open) setNotice(null);
+    else setNotice({ name: item.name, productId: item.productId });
   };
   const removeItem = (idx: number) => setItems(previous => previous.filter((_, i) => i !== idx));
   const updateQty = (idx: number, delta: number) => {
@@ -121,7 +126,7 @@ export function CartProvider({
   );
 
   return (
-    <Ctx.Provider value={{ items, addItem, removeItem, updateQty, clearCart, open, setOpen, recommendations }}>
+    <Ctx.Provider value={{ items, addItem, removeItem, updateQty, clearCart, open, setOpen, recommendations, whatsapp }}>
       {children}
       {notice && (
         <div role="status" aria-live="polite" className="fixed top-[126px] sm:top-[76px] left-3 right-3 sm:left-auto sm:right-6 z-[65] sm:w-[410px] max-h-[calc(100dvh-140px)] overflow-y-auto bg-white border-2 border-green rounded-2xl p-3 shadow-2xl">
@@ -162,8 +167,11 @@ export function CartProvider({
 }
 
 function CartDrawer() {
-  const { items, removeItem, updateQty, setOpen, recommendations } = useCart();
+  const { items, addItem, removeItem, updateQty, setOpen, recommendations } = useCart();
+  const [showProductSearch, setShowProductSearch] = useState(false);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const originalTotal = items.reduce((sum, item) => sum + getDiscountPricing(item.price).original * item.qty, 0);
+  const discountSavings = Math.max(0, originalTotal - subtotal);
   const drawerRecommendations = useMemo(
     () => selectRecommendations(items, recommendations, items.at(-1)?.productId ?? null, 3),
     [items, recommendations]
@@ -182,6 +190,13 @@ function CartDrawer() {
           <button type="button" className="min-w-12 min-h-12 rounded-lg flex items-center justify-center" aria-label="Cerrar mi pedido" onClick={() => setOpen(false)}><X size={23}/></button>
         </header>
         <div className="flex-1 overflow-y-auto px-4 py-2">
+          <div className="border-b border-hair py-3">
+            <button type="button" aria-expanded={showProductSearch} onClick={() => setShowProductSearch(value => !value)}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-copper bg-[#FFF9F3] px-3 text-sm font-bold text-copper">
+              <Plus size={19} aria-hidden="true" /> {showProductSearch ? "Ocultar búsqueda" : "Agregar más productos al pedido"}
+            </button>
+            {showProductSearch && <div className="mt-3"><CartProductSearch items={items} recommendations={recommendations} addItem={addItem} onNavigate={() => setOpen(false)} /></div>}
+          </div>
           {items.length === 0 && <div className="text-center py-16">
             <ShoppingCart size={44} className="mx-auto mb-4 text-copper" />
             <p className="font-semibold text-base">Todavía no has agregado productos.</p>
@@ -195,7 +210,8 @@ function CartDrawer() {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-base leading-snug">{item.name}</p>
                 <p className="text-xs text-muted mt-1">Referencia: {item.sku}</p>
-                <p className="text-sm font-bold text-copper mt-1">{formatCOP(item.price * item.qty)}</p>
+                <p className="mt-1 text-xs text-muted line-through">Antes {formatCOP(getDiscountPricing(item.price).original * item.qty)}</p>
+                <p className="text-sm font-bold text-copper">Ahora {formatCOP(item.price * item.qty)}</p>
                 <div className="flex gap-2 items-center mt-2">
                   <button type="button" aria-label={"Quitar una unidad de " + item.name} onClick={() => updateQty(index, -1)} className="h-11 w-11 border border-hair rounded-lg flex items-center justify-center"><Minus size={18}/></button>
                   <span className="font-bold min-w-7 text-center text-base">{item.qty}</span>
@@ -220,7 +236,9 @@ function CartDrawer() {
         </div>
         <footer className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-hair bg-white">
           {items.length > 0 && <>
-            <div className="flex justify-between text-base mb-1"><span>Subtotal</span><strong>{formatCOP(subtotal)}</strong></div>
+            <div className="flex justify-between text-sm text-muted mb-1"><span>Antes del descuento</span><span className="line-through">{formatCOP(originalTotal)}</span></div>
+            <div className="flex justify-between text-sm text-green mb-2"><span>Ahorro aplicado (30%)</span><strong>-{formatCOP(discountSavings)}</strong></div>
+            <div className="flex justify-between text-base mb-1"><span>Total de productos</span><strong>{formatCOP(subtotal)}</strong></div>
             <p className="text-sm text-muted mb-3">El costo de envío se confirma por WhatsApp.</p>
             <Link href="/checkout" onClick={() => setOpen(false)}
               className="w-full min-h-14 rounded-xl bg-green text-white flex items-center justify-center text-base font-bold text-center px-4">
@@ -237,6 +255,7 @@ function CartDrawer() {
 
 function RecommendationCard({ product, compact = false }: { product: CartRecommendation; compact?: boolean }) {
   const { addItem, setOpen } = useCart();
+  const offer = getDiscountPricing(product.price);
   const addRecommendation = () => {
     addItem({
       productId: product.id,
@@ -257,7 +276,8 @@ function RecommendationCard({ product, compact = false }: { product: CartRecomme
       </div>
       <div className="min-w-0 flex-1">
         <p className={`${compact ? "text-xs" : "text-sm"} font-semibold leading-snug line-clamp-2`}>{product.name}</p>
-        <p className="text-xs font-bold text-copper mt-1">Desde {formatCOP(product.price)}</p>
+        <p className="mt-1 text-xs text-muted line-through">{formatCOP(offer.original)}</p>
+        <p className="text-xs font-bold text-copper">{product.hasVariants ? "Desde " : ""}{formatCOP(offer.current)} <span className="text-green">(-30%)</span></p>
       </div>
       {product.hasVariants ? (
         <Link href={`/productos/${product.slug}`} onClick={() => setOpen(false)} className="min-h-11 px-3 rounded-lg border border-copper text-copper text-xs font-bold flex items-center justify-center text-center">
