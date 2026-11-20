@@ -58,7 +58,7 @@ export default async function HomePage() {
               Compra el material eléctrico correcto <span className="text-copper-bright">sin perder tiempo buscando referencias.</span>
             </h1>
             <p className="mt-5 max-w-[610px] text-base leading-relaxed text-white/78 sm:text-lg">
-              Busca por calibre, nombre o SKU, compara precios publicados y arma tu pedido. Antes de pagar, un asesor confirma disponibilidad, entrega y costo final contigo.
+              Busca por calibre, nombre o SKU, compara precios y arma tu pedido. Confirmamos disponibilidad y envío para que pagues el valor final de forma segura con iion pay.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -110,7 +110,7 @@ export default async function HomePage() {
           {[
             { number: "01", title: "Encuentra", text: "Busca por producto, calibre, marca o referencia." },
             { number: "02", title: "Arma el pedido", text: "Compara precios y agrega las cantidades necesarias." },
-            { number: "03", title: "Confirma", text: "Enviamos el pedido a WhatsApp y validamos entrega y disponibilidad." },
+            { number: "03", title: "Confirma y paga", text: "Validamos inventario y envío; después puedes pagar el valor final con iion pay." },
           ].map((step) => (
             <div key={step.number} className="flex gap-4 py-6 sm:px-6 first:pl-0 last:pr-0">
               <span className="font-mono text-sm font-bold text-copper">{step.number}</span>
@@ -156,7 +156,7 @@ export default async function HomePage() {
               {[
                 { icon: CircleDollarSign, title: "Precio publicado", text: "Valor por unidad o precio desde, según variantes." },
                 { icon: ShieldCheck, title: "Referencia verificable", text: "Nombre, SKU, marca, presentación y ficha técnica." },
-                { icon: MessageCircle, title: "Confirmación humana", text: "Disponibilidad, entrega y costo final por WhatsApp." },
+                { icon: MessageCircle, title: "Pago seguro", text: "Tras confirmar disponibilidad y entrega, obtienes tu enlace real de iion pay." },
               ].map(({ icon: Icon, title, text }) => (
                 <div key={title} className="rounded-2xl border border-white/10 bg-white/5 p-5"><Icon className="text-copper-bright" size={24} /><h3 className="mt-4 font-bold">{title}</h3><p className="mt-2 text-sm leading-relaxed text-white/65">{text}</p></div>
               ))}
