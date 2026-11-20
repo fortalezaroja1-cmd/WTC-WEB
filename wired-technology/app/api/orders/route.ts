@@ -11,6 +11,8 @@ type OrderMeta = {
   stockValidated: boolean;
   inventoryApplied: boolean;
   shippingQuoted: boolean;
+  fulfillment: "DELIVERY" | "PICKUP";
+  paymentChoice: "IION" | "WHATSAPP" | "PAY_LATER";
 };
 
 function buildNotes(meta: OrderMeta, visibleNotes: string) {
@@ -44,15 +46,62 @@ export async function POST(req: NextRequest) {
     const { customer, items } = body;
     const requestId = String(body.requestId || "").trim().slice(0, 100);
     const origin = cleanOrigin(body.origin);
+    const fulfillment = body.fulfillment === "PICKUP" ? "PICKUP" : "DELIVERY";
+    const paymentChoice = ["IION", "WHATSAPP", "PAY_LATER"].includes(body.paymentChoice)
+      ? body.paymentChoice as OrderMeta["paymentChoice"]
+      : "WHATSAPP";
 
-    if (!customer?.name || !customer?.phone || !customer?.address || !customer?.city || !customer?.barrio || !items?.length) {
+    if (
+      !customer?.name || !customer?.phone || !customer?.city || !Array.isArray(items) || !items.length ||
+      (fulfillment === "DELIVERY" && (!customer?.address || !customer?.barrio))
+    ) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
     }
+    if (items.length > 100) return NextResponse.json({ error: "El pedido supera el máximo de referencias" }, { status: 400 });
 
-    const subtotal = Number(body.subtotal || 0);
-    if (!Number.isFinite(subtotal) || subtotal < 0) {
-      return NextResponse.json({ error: "Subtotal inválido" }, { status: 400 });
+    const productIds = [...new Set(items.map((item: any) => String(item.productId || "")).filter(Boolean))];
+    if (productIds.length !== new Set(items.map((item: any) => String(item.productId || ""))).size) {
+      return NextResponse.json({ error: "Hay productos sin identificar" }, { status: 400 });
     }
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds }, status: "PUBLISHED" },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        price: true,
+        stock: true,
+        variants: {
+          where: { active: true },
+          select: { id: true, name: true, sku: true, price: true, stock: true },
+        },
+      },
+    });
+    const productById = new Map(products.map(product => [product.id, product]));
+    const validatedItems = items.map((item: any) => {
+      const product = productById.get(String(item.productId || ""));
+      const qty = Number(item.qty);
+      if (!product || !Number.isInteger(qty) || qty < 1 || qty > 999) throw new Error("INVALID_ITEM");
+      const variantId = item.variantId ? String(item.variantId) : null;
+      const variant = variantId ? product.variants.find(candidate => candidate.id === variantId) : null;
+      if (variantId && !variant) throw new Error("INVALID_VARIANT");
+      if (!variantId && product.variants.length) throw new Error("VARIANT_REQUIRED");
+      const stock = variant ? variant.stock : product.stock;
+      if (stock < qty) throw new Error("INSUFFICIENT_STOCK");
+      const price = Number(variant ? variant.price : product.price);
+      if (!Number.isFinite(price) || price <= 0) throw new Error("INVALID_PRICE");
+      return {
+        name: variant ? `${product.name} · ${variant.name}` : product.name,
+        sku: variant?.sku || product.sku,
+        qty,
+        price,
+        total: price * qty,
+        productId: product.id,
+        variantId: variant?.id || null,
+      };
+    });
+    const subtotal = validatedItems.reduce((sum, item) => sum + item.total, 0);
 
     // Los pedidos armados por el cliente nunca presumen envío gratis.
     // Hasta que logística/Skydropx cotice el flete, shipping se mantiene en 0
@@ -67,15 +116,16 @@ export async function POST(req: NextRequest) {
         select: { id: true, number: true },
       });
       if (existingOrder) {
-        return NextResponse.json({ orderNumber: existingOrder.number, orderId: existingOrder.id, duplicate: true });
+        return NextResponse.json({ orderNumber: existingOrder.number, orderId: existingOrder.id, duplicate: true, subtotal });
       }
     }
 
     const result = await prisma.$transaction(async (tx) => {
       let dbCustomer = await tx.customer.findFirst({ where: { phone: customer.phone } });
       const customerNotes = [
-        customer.barrio ? `Barrio: ${customer.barrio}` : null,
-        customer.reference ? `Referencia: ${customer.reference}` : null,
+        fulfillment === "PICKUP" ? "Modalidad: Recoger en tienda" : "Modalidad: Entrega a domicilio",
+        fulfillment === "DELIVERY" && customer.barrio ? `Barrio: ${customer.barrio}` : null,
+        fulfillment === "DELIVERY" && customer.reference ? `Referencia: ${customer.reference}` : null,
       ].filter(Boolean).join("\n");
 
       if (!dbCustomer) {
@@ -84,7 +134,7 @@ export async function POST(req: NextRequest) {
             name: customer.name,
             phone: customer.phone,
             email: customer.email || null,
-            address: customer.address,
+            address: fulfillment === "DELIVERY" ? customer.address : null,
             city: customer.city,
             notes: customerNotes || null,
           },
@@ -95,7 +145,7 @@ export async function POST(req: NextRequest) {
           data: {
             name: customer.name,
             email: customer.email || dbCustomer.email,
-            address: customer.address,
+            address: fulfillment === "DELIVERY" ? customer.address : dbCustomer.address,
             city: customer.city,
             notes: customerNotes || dbCustomer.notes,
           },
@@ -104,8 +154,9 @@ export async function POST(req: NextRequest) {
 
       const orderNumber = await nextOrderNumber(tx);
       const visibleNotes = [
-        customer.barrio ? `Barrio: ${customer.barrio}` : null,
-        customer.reference ? `Referencia de entrega: ${customer.reference}` : null,
+        fulfillment === "PICKUP" ? "Modalidad: Recoger en tienda" : "Modalidad: Entrega a domicilio",
+        fulfillment === "DELIVERY" && customer.barrio ? `Barrio: ${customer.barrio}` : null,
+        fulfillment === "DELIVERY" && customer.reference ? `Referencia de entrega: ${customer.reference}` : null,
         customer.notes ? `Observaciones del cliente: ${customer.notes}` : null,
       ].filter(Boolean).join("\n");
 
@@ -118,7 +169,15 @@ export async function POST(req: NextRequest) {
         stockValidated: false,
         inventoryApplied: false,
         shippingQuoted: false,
+        fulfillment,
+        paymentChoice,
       };
+
+      const paymentMethod = paymentChoice === "IION"
+        ? "iion pay — pendiente de enlace de pago"
+        : paymentChoice === "PAY_LATER"
+          ? "Pago al recibir — sujeto a confirmación"
+          : "Por confirmar con asesor";
 
       const order = await tx.order.create({
         data: {
@@ -127,21 +186,21 @@ export async function POST(req: NextRequest) {
           subtotal,
           shipping,
           total,
-          paymentMethod: "Pago en casa / contraentrega",
+          paymentMethod,
           notes: buildNotes(meta, visibleNotes),
           items: {
-            create: items.map((it: any) => ({
+            create: validatedItems.map((it) => ({
               name: it.name,
               sku: it.sku,
               qty: it.qty,
               unitPrice: it.price,
-              total: it.price * it.qty,
+              total: it.total,
               productId: it.productId || null,
               variantId: it.variantId || null,
             })),
           },
           history: {
-            create: { action: `Pedido nuevo · Origen: ${origin} · Envío por cotizar`, actor: "cliente" },
+            create: { action: `Solicitud web · Origen: ${origin} · Envío por cotizar · Pago ${paymentMethod}`, actor: "cliente" },
           },
         },
       });
@@ -162,8 +221,14 @@ export async function POST(req: NextRequest) {
       console.error("[CRM_STAGE_SYNC] No se pudo sincronizar pedido nuevo", syncError);
     }
 
-    return NextResponse.json({ orderNumber: result.number, orderId: result.id, shippingQuoted: false });
+    return NextResponse.json({ orderNumber: result.number, orderId: result.id, shippingQuoted: false, subtotal });
   } catch (error: any) {
+    if (error?.message === "INSUFFICIENT_STOCK") {
+      return NextResponse.json({ error: "La disponibilidad cambió. Revisa las cantidades e inténtalo de nuevo." }, { status: 409 });
+    }
+    if (["INVALID_ITEM", "INVALID_VARIANT", "VARIANT_REQUIRED", "INVALID_PRICE"].includes(error?.message)) {
+      return NextResponse.json({ error: "Uno de los productos ya no coincide con el catálogo. Actualiza el carrito." }, { status: 409 });
+    }
     console.error("Error creando pedido:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

@@ -37,3 +37,9 @@ body {
 }
 @keyframes flow { to { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) { .livewire { animation: none; } }
+
+/* Reseñas: avance horizontal continuo; pausa al pasar el mouse o enfocar. */
+.reviews-track { animation: reviews-slide 28s linear infinite; }
+.reviews-track.reviews-paused { animation-play-state: paused; }
+@keyframes reviews-slide { to { transform: translateX(calc(-50% - 8px)); } }
+@media (prefers-reduced-motion: reduce) { .reviews-track { animation: none; } }
