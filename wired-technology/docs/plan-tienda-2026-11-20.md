@@ -33,3 +33,9 @@ WCAG 2.2 AA exige al menos 4,5:1 para texto normal y 3:1 para texto grande. Cál
 
 Fuente: W3C, *Understanding Success Criterion 1.4.3: Contrast (Minimum)*.
 
+## Dependencias
+
+- Se actualizó `jspdf` a 4.2.1 para eliminar el aviso crítico.
+- Se retiró `mercadopago`: no existían importaciones ni una integración activa en el código.
+- Quedan 6 avisos (`Next.js`, `Prisma` y transitivos) que requieren actualizaciones mayores y una fase separada de compatibilidad; no deben forzarse dentro de este cambio.
+

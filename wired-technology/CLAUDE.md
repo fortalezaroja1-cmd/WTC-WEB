@@ -38,4 +38,5 @@
 | 2026-11-20 | Solicitud demo sin escrituras en pedidos, CRM o notificaciones | Revisión de API | Implementado en rama |
 | 2026-11-20 | Precio e inventario recalculados en servidor | TypeScript | Implementado en rama |
 | 2026-11-20 | Inventario visual: 52/60 con imagen; 8 pendientes | Catálogo publicado | Auditada |
+| 2026-11-20 | Actualizado jsPDF y retirado Mercado Pago sin uso | `npm audit` | Crítico eliminado; 6 avisos pendientes |
 

@@ -12,7 +12,7 @@ Tienda e-commerce con panel administrativo para distribución de cables Centelsa
 - **Imágenes:** Supabase Storage
 - **Estilos:** Tailwind CSS v4
 - **Deploy:** Vercel
-- **Pagos:** Mercado Pago (Checkout Pro)
+- **Pagos:** simulador seguro en tienda + enlaces administrativos de iion pay
 
 ---
 
@@ -125,12 +125,11 @@ prisma/
 
 Tu tienda quedará en: `https://www.wtgy.online`
 
-## Mercado Pago
+## Pagos
 
-Para activar pagos:
-1. Crea cuenta en [mercadopago.com.co](https://www.mercadopago.com.co)
-2. Tus credenciales → API → copia Access Token y Public Key
-3. Agrégalas a las variables de entorno
+- El checkout público incluye una demostración que no cobra ni recibe datos bancarios reales.
+- Los enlaces reales de iion pay se generan únicamente desde el panel autorizado, después de validar inventario y envío.
+- No marques un pedido como pagado por el resultado de una simulación.
 
 ---
 
