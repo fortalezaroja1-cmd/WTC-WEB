@@ -3,7 +3,7 @@
 | Cambio | Hipótesis | Impacto esperado | Riesgo | Cómo se deshace | Estado |
 |---|---|---|---|---|---|
 | Checkout en pasos | Menos carga mental y errores en móvil | Alto | El flujo puede alargarse si los pasos no son claros | Restaurar respaldo de checkout | Implementado en rama |
-| Pago con tarjeta de demostración | Permite validar la experiencia sin dinero real | Alto | Confusión con un cobro real | Etiquetas DEMO permanentes y eliminar el módulo | Implementado en rama |
+| Pago con tarjeta de demostración | Permite validar la experiencia sin dinero real | Alto | Confusión con un cobro real | Etiquetas DEMO permanentes y eliminar el módulo | Implementado sin escrituras reales |
 | Recalcular pedido en servidor | Evita manipulación de precios desde el navegador | Alto | Diferencias si el catálogo cambia mientras se compra | Mostrar error y pedir actualizar carrito | Implementado en rama |
 | Paleta accesible azul/naranja/verde | Mejora jerarquía y confianza | Medio | Cambio visual demasiado amplio | Restaurar variables CSS | Implementado en rama |
 | Inventario de imágenes | Reduce fichas engañosas o incompletas | Alto | Fuentes sin autorización | Mantener marcador neutro y lista pendiente | Pendiente |

@@ -93,7 +93,8 @@ export default function CheckoutPage() {
     if (!deliveryValid || !items.length || !requestId) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/orders", {
+      const orderEndpoint = paymentChoice === "CARD_DEMO" ? "/api/demo-orders" : "/api/orders";
+      const response = await fetch(orderEndpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestId, origin, fulfillment: form.fulfillment, paymentChoice, customer: form,
@@ -127,7 +128,9 @@ export default function CheckoutPage() {
         localStorage.removeItem("wt_checkout_request_id");
         localStorage.removeItem("wt_checkout_draft");
       } catch {}
-      trackMetaEvent("Lead", { content_ids: items.map(item => item.sku), content_type: "product", value: subtotal, currency: "COP" });
+      if (paymentChoice !== "CARD_DEMO") {
+        trackMetaEvent("Lead", { content_ids: items.map(item => item.sku), content_type: "product", value: subtotal, currency: "COP" });
+      }
       // Nunca se emite Purchase: la tarjeta es una demostración y la solicitud sigue pendiente.
     } catch (submitError: any) {
       setError(submitError?.message || "No pudimos completar la solicitud.");
