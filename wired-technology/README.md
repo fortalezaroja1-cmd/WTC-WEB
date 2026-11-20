@@ -75,8 +75,8 @@ Abre [http://localhost:3000](http://localhost:3000)
 ### 7. Acceder al panel admin
 
 - URL: [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
-- Email: `admin@wiredtech.co`
-- Contraseña: `admin123`
+- Crea o asigna el usuario administrador mediante un proceso seguro de inicialización.
+- Nunca documentes contraseñas reales o temporales dentro del repositorio.
 
 ---
 

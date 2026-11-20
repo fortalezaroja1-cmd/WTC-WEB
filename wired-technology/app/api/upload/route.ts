@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 const BUCKET = "products";
 
 export async function POST(req: NextRequest) {
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+    if (!url || !key) {
+      return NextResponse.json({ error: "El almacenamiento de imágenes no está configurado" }, { status: 503 });
+    }
+    const supabase = createClient(url, key);
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const sku = (formData.get("sku") as string) || "misc";

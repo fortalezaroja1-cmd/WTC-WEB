@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@theme {
+  --color-graphite: #14181F;
+  --color-graphite-2: #1B212B;
+  --color-slate-dark: #2A323D;
+  --color-copper: #C67B42;
+  --color-copper-bright: #E0954E;
+  --color-amber: #F5B301;
+  --color-paper: #F3F4F6;
+  --color-card: #FFFFFF;
+  --color-ink: #161B22;
+  --color-muted: #6B7480;
+  --color-hair: #E4E7EB;
+  --color-green: #1F9D57;
+  --color-alert: #D14343;
+  --color-blue: #2C5AA0;
+
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+.livewire {
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-copper), var(--color-amber), var(--color-copper));
+  background-size: 200% 100%;
+  animation: flow 6s linear infinite;
+}
+@keyframes flow { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .livewire { animation: none; } }

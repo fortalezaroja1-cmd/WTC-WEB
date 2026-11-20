@@ -1,20 +1,20 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
 
 @theme {
-  --color-graphite: #14181F;
-  --color-graphite-2: #1B212B;
-  --color-slate-dark: #2A323D;
-  --color-copper: #C67B42;
-  --color-copper-bright: #E0954E;
+  --color-graphite: #12344D;
+  --color-graphite-2: #0C2A40;
+  --color-slate-dark: #243746;
+  --color-copper: #B7470B;
+  --color-copper-bright: #9E3B08;
   --color-amber: #F5B301;
-  --color-paper: #F3F4F6;
+  --color-paper: #F7FAFC;
   --color-card: #FFFFFF;
-  --color-ink: #161B22;
-  --color-muted: #6B7480;
-  --color-hair: #E4E7EB;
-  --color-green: #1F9D57;
-  --color-alert: #D14343;
+  --color-ink: #243746;
+  --color-muted: #5B6872;
+  --color-hair: #D8E1E8;
+  --color-green: #0F766E;
+  --color-alert: #B42318;
   --color-blue: #2C5AA0;
 
   --font-display: "Space Grotesk", system-ui, sans-serif;
