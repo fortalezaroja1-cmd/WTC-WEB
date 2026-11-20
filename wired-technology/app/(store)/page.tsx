@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "@/components/store/ProductCard";
+import { CustomerReviews } from "@/components/store/CustomerReviews";
 import { cableCatalogHref } from "@/lib/storefront-navigation";
 import {
   ArrowRight,
@@ -184,6 +185,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      <CustomerReviews />
 
       <section className="mx-auto max-w-[1180px] px-5 pt-14">
         <div className="grid overflow-hidden rounded-3xl bg-copper text-white lg:grid-cols-[1fr_auto]">
