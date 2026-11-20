@@ -1,13 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !key) throw new Error("Supabase Storage no está configurado");
+  return createClient(url, key);
+}
 
 const BUCKET = "products";
 
 export async function uploadImage(file: File, sku: string): Promise<string | null> {
+  const supabase = getSupabase();
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const path = `${sku}/${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false });
@@ -16,6 +19,7 @@ export async function uploadImage(file: File, sku: string): Promise<string | nul
 }
 
 export async function deleteImage(url: string): Promise<boolean> {
+  const supabase = getSupabase();
   const marker = `/storage/v1/object/public/${BUCKET}/`;
   const idx = url.indexOf(marker);
   if (idx === -1) return false;

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.vercel/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
