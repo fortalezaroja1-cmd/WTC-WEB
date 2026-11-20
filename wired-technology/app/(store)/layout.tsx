@@ -33,7 +33,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
         variants: {
           where: { active: true },
           orderBy: { order: "asc" },
-          select: { id: true, name: true, sku: true, price: true, stock: true, image: true },
+          select: { id: true, name: true, sku: true, price: true, promoPrice: true, stock: true, image: true },
         },
       },
     }),
