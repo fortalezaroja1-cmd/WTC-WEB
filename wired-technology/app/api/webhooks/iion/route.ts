@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { verifyIionWebhook } from "@/lib/iion";
 
@@ -9,11 +10,13 @@ export async function POST(req: NextRequest) {
   if (!verifyIionWebhook(raw, req.headers)) return NextResponse.json({ error: "Firma inválida" }, { status: 401 });
   let body: any;
   try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
-  const eventId = String(body.id || req.headers.get("x-iion-event-id") || "");
   const event = String(body.event || req.headers.get("x-iion-event-type") || "");
   const paymentId = String(body.data?.id || "");
   const reference = String(body.data?.reference || "");
-  if (!eventId || !event || (!paymentId && !reference)) return NextResponse.json({ error: "Evento incompleto" }, { status: 400 });
+  if (!event || (!paymentId && !reference)) return NextResponse.json({ error: "Evento incompleto" }, { status: 400 });
+  // iion pay no garantiza un ID de evento en el cuerpo. El hash del cuerpo crudo
+  // hace que los reintentos del mismo aviso sean idempotentes.
+  const eventId = createHash("sha256").update(raw).digest("hex");
 
   const order = await prisma.order.findFirst({ where: paymentId ? { iionPaymentId: paymentId } : { number: reference } });
   try {

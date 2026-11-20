@@ -15,8 +15,8 @@ export type IionCollect = {
 };
 
 function credentials() {
-  const key = process.env.IION_API_KEY?.trim();
-  const secret = process.env.IION_API_SECRET?.trim();
+  const key = process.env.IIONPAY_API_KEY?.trim();
+  const secret = process.env.IIONPAY_API_SECRET?.trim();
   if (!key || !secret) throw new Error("IION_NOT_CONFIGURED");
   return { key, secret };
 }
@@ -28,7 +28,6 @@ export async function createIionCollect(input: {
   customerName?: string | null;
   customerEmail?: string | null;
   metadata: Record<string, string>;
-  idempotencyKey: string;
 }) {
   const { key, secret } = credentials();
   const callbackUrl = process.env.IION_CATALOG_RETURN_URL?.trim();
@@ -38,7 +37,6 @@ export async function createIionCollect(input: {
       "Content-Type": "application/json",
       "X-Api-Key": key,
       "X-Api-Secret": secret,
-      "Idempotency-Key": input.idempotencyKey,
     },
     body: JSON.stringify({
       reference: input.reference,
@@ -63,15 +61,14 @@ export async function createIionCollect(input: {
 }
 
 export function verifyIionWebhook(raw: string, headers: Headers) {
-  const secret = process.env.IION_WEBHOOK_SECRET?.trim();
+  const secret = process.env.IIONPAY_WEBHOOK_SECRET?.trim();
   const signature = headers.get("x-iion-signature") || headers.get("x-niio-signature") || "";
   const timestamp = headers.get("x-iion-timestamp") || headers.get("x-niio-timestamp") || "";
   if (!secret || !signature || !/^\d+$/.test(timestamp)) return false;
   const age = Math.abs(Date.now() - Number(timestamp));
   if (age > 5 * 60 * 1000) return false;
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex");
-  const received = signature.replace(/^sha256=/, "");
-  const left = Buffer.from(expected, "hex");
-  const right = Buffer.from(received, "hex");
+  const expected = `sha256=${createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}`;
+  const left = Buffer.from(expected);
+  const right = Buffer.from(signature);
   return left.length === right.length && timingSafeEqual(left, right);
 }

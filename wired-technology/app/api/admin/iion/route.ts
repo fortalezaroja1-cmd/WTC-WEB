@@ -31,7 +31,6 @@ export async function POST(req: NextRequest) {
       customerName: order.customer?.name,
       customerEmail: order.customer?.email,
       metadata: { system: "catalog", orderId: order.id, orderNumber: order.number },
-      idempotencyKey: `catalog:${order.id}:${amount}`,
     });
     await prisma.order.update({
       where: { id: order.id },
