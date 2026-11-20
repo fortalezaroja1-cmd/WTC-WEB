@@ -28,6 +28,7 @@ export interface CartRecommendation {
   hasVariants: boolean;
   stock: number;
   featured: boolean;
+  variants: Array<{ id: string; name: string; sku: string; price: number; stock: number; image: string | null }>;
 }
 
 interface CartCtx {
