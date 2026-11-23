@@ -49,7 +49,7 @@ function getHeroCopy(params: StorefrontSearchParams) {
       accent: "y compra sin perder tiempo.",
       description: "Busca por calibre, marca o referencia. Compara precios con IVA incluido, arma tu pedido y confirma inventario y entrega antes de pagar.",
       href: "/productos?q=cable",
-      cta: "Ver cables y alambres",
+      cta: "Ver cables y precios",
     };
   }
 
@@ -60,7 +60,7 @@ function getHeroCopy(params: StorefrontSearchParams) {
       accent: "con precio claro desde el inicio.",
       description: "Compara referencias, consumo y presentación. Arma tu pedido con IVA incluido y confirma inventario y entrega antes de pagar.",
       href: "/productos?q=iluminacion",
-      cta: "Ver iluminación",
+      cta: "Ver iluminación y precios",
     };
   }
 
@@ -71,7 +71,7 @@ function getHeroCopy(params: StorefrontSearchParams) {
       accent: "y confirma tu pedido más rápido.",
       description: "Busca por producto, marca o referencia. Revisa el precio con IVA incluido y confirma inventario y entrega antes de pagar.",
       href: "/productos?q=accesorio",
-      cta: "Ver accesorios",
+      cta: "Ver accesorios y precios",
     };
   }
 
@@ -81,7 +81,7 @@ function getHeroCopy(params: StorefrontSearchParams) {
     accent: "y compra sin perder tiempo.",
     description: "Busca por producto, calibre o referencia. Compara precios con IVA incluido, arma tu pedido y confirma inventario y entrega antes de pagar.",
     href: "/productos",
-    cta: "Buscar mi producto",
+    cta: "Buscar productos y ver precios",
   };
 }
 
@@ -128,12 +128,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               {heroCopy.description}
             </p>
 
-            <div className="mt-7 flex flex-wrap items-center gap-4 sm:gap-6">
-              <Link href={heroCopy.href} className="inline-flex min-h-14 items-center justify-center rounded-full bg-[#191919] px-7 py-3 text-base font-bold text-white transition-colors hover:bg-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper">
+            <div className="mt-7 flex max-w-[520px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-6">
+              <Link href={heroCopy.href} className="inline-flex min-h-14 w-full items-center justify-center rounded-full bg-[#191919] px-7 py-3 text-center text-base font-bold text-white shadow-sm transition-colors hover:bg-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper sm:w-auto">
                 {heroCopy.cta}
               </Link>
-              <a href="#opiniones" className="inline-flex min-h-12 items-center gap-2 border-b border-ink text-sm font-semibold hover:text-copper">Leer experiencias <ArrowRight size={17} aria-hidden="true" /></a>
+              <a href="#opiniones" className="inline-flex min-h-12 items-center justify-center border-b border-ink text-sm font-semibold hover:text-copper sm:justify-start">Leer experiencias</a>
             </div>
+            <p className="mt-3 max-w-[520px] text-center text-xs font-medium text-muted sm:text-left">Entrarás al catálogo para comparar productos, referencias y precios.</p>
 
             <div className="mt-7 grid max-w-[520px] grid-cols-2 justify-items-center gap-3 sm:grid-cols-4 sm:gap-4" aria-label="Cómo compramos en Wired">
               {[
@@ -175,7 +176,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                   <p className="text-xs text-muted">Busca, compara y agrega</p>
                   <p className="mt-1 font-semibold text-ink">Tu pedido queda listo para confirmar</p>
                 </div>
-                <Link href="/productos" aria-label="Abrir catálogo" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-graphite text-white"><ArrowRight size={20} /></Link>
+                <Link href={heroCopy.href} aria-label={heroCopy.cta} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-graphite text-white"><ArrowRight size={20} /></Link>
               </div>
             </div>
           </div>
