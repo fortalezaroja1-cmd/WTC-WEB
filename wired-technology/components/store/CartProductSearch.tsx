@@ -4,7 +4,7 @@ import { useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Package, Plus, Search } from "lucide-react";
 import type { CartItem, CartRecommendation } from "@/components/store/CartProvider";
-import { formatCOP, getDiscountPricing } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, getPublicPrice } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
 type ProductVariant = CartRecommendation["variants"][number];
@@ -63,7 +63,7 @@ export function CartProductSearch({ items, recommendations, addItem, onNavigate 
       content_ids: [sku],
       content_type: "product",
       content_name: name,
-      value: price,
+      value: getPublicPrice(price),
       currency: "COP",
       num_items: 1,
     });
@@ -119,12 +119,12 @@ export function CartProductSearch({ items, recommendations, addItem, onNavigate 
                     className="mt-2 min-h-11 w-full max-w-full rounded-lg border border-copper bg-white px-2 text-sm text-ink"
                   >
                     {product.variants.filter(option => option.stock > 0).map(option => (
-                      <option key={option.id} value={option.id}>{option.name} · {formatCOP(option.price)}</option>
+                      <option key={option.id} value={option.id}>{option.name} · {formatCOP(getPublicPrice(option.price))}</option>
                     ))}
                   </select>
                 )}
                 <p className="mt-1 text-xs text-muted"><span className="line-through">{formatCOP(offer.original)}</span> · <span className="font-bold text-green">-30%</span></p>
-                <p className="text-sm font-bold text-copper">{formatCOP(offer.current)}</p>
+                <p className="text-sm font-bold text-copper">{formatCOP(offer.current)} <span className="text-[10px] font-semibold text-slate-dark">IVA incluido</span></p>
                 <Link href={`/productos/${product.slug}`} onClick={onNavigate} className="mt-1 inline-flex min-h-8 items-center text-xs font-semibold text-copper underline">
                   Ver ficha del producto
                 </Link>

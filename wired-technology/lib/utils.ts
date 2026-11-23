@@ -8,8 +8,17 @@ export function formatCOP(n: number | string | null | undefined): string {
   return "$ " + new Intl.NumberFormat("es-CO").format(Math.round(Number(n) || 0));
 }
 
+export const IVA_RATE = 0.19;
+
+// Los precios guardados en el catálogo son valores antes de IVA. Todo precio
+// público y todo cobro se calculan desde esta función para evitar diferencias.
+export function getPublicPrice(netPrice: number | string | null | undefined) {
+  const net = Math.max(0, Number(netPrice) || 0);
+  return Math.round(net * (1 + IVA_RATE));
+}
+
 export function getDiscountPricing(currentPrice: number | string | null | undefined) {
-  const current = Math.max(0, Math.round(Number(currentPrice) || 0));
+  const current = getPublicPrice(currentPrice);
   const original = current > 0 ? Math.round(current / 0.7) : 0;
 
   return {

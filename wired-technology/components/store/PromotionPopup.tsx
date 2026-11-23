@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BadgePercent, ShoppingCart, X } from "lucide-react";
-import { formatCOP } from "@/lib/utils";
+import { formatCOP, getPublicPrice } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
 
 export interface EntryPromotion {
@@ -109,11 +109,12 @@ export function PromotionPopup({
               <div className="flex items-end gap-3 mt-4">
                 <div>
                   {promotion.hasVariants && <span className="block text-xs text-muted mb-1">Desde</span>}
-                  <span className="font-display text-3xl font-bold text-copper">{formatCOP(promotion.price)}</span>
+                  <span className="font-display text-3xl font-bold text-copper">{formatCOP(getPublicPrice(promotion.price))}</span>
+                  <span className="mt-1 block text-xs font-semibold text-slate-dark">IVA incluido</span>
                 </div>
                 {hasDiscount && (
                   <>
-                    <span className="text-sm text-muted line-through mb-1">{formatCOP(promotion.originalPrice as number)}</span>
+                    <span className="text-sm text-muted line-through mb-1">{formatCOP(getPublicPrice(promotion.originalPrice as number))}</span>
                     <span className="rounded-full bg-green text-white text-xs font-bold px-2.5 py-1 mb-1">-{discount}%</span>
                   </>
                 )}

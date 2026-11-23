@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Plus, Minus, ArrowRight } from "lucide-react";
 import { useCart } from "./CartProvider";
-import { formatCOP, getDiscountPricing } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, getPublicPrice } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
 interface Variant {
@@ -54,7 +54,7 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
       content_ids: [curSku],
       content_type: "product",
       content_name: displayName,
-      value: curPrice * qty,
+      value: getPublicPrice(curPrice) * qty,
       currency: "COP",
       num_items: qty,
     });
@@ -78,6 +78,7 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
           <span className="font-display text-3xl font-bold text-copper">{formatCOP(offer.current)}</span>
           <span className="text-sm text-muted">/ {productUnit}</span>
         </div>
+        <p className="mt-1 text-xs font-semibold text-slate-dark">IVA incluido</p>
         <p className="mt-1 text-sm font-bold text-green">Te ahorras {formatCOP(offer.savings)}</p>
       </div>
 
@@ -101,7 +102,7 @@ export function AddToCart({ productId, productName, productSku, productSlug, pro
                   selId === v.id ? "border-copper bg-[#FBF3EC]" : v.stock <= 0 ? "border-hair bg-paper text-muted cursor-not-allowed" : "border-hair hover:border-copper"
                 }`}>
                 <div>{v.name}</div>
-                <div className="font-mono text-[10px] font-normal mt-0.5">{v.stock <= 0 ? "agotado" : formatCOP(v.price)}</div>
+                <div className="font-mono text-[10px] font-normal mt-0.5">{v.stock <= 0 ? "agotado" : formatCOP(getPublicPrice(v.price))}</div>
               </button>
             ))}
           </div>
