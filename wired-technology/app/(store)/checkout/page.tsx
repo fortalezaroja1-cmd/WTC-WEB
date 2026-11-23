@@ -136,8 +136,9 @@ export default function CheckoutPage() {
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[.12em] text-copper">Pago seguro</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-graphite">Finaliza tu compra</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">Completa tus datos una sola vez. Si el total del envío ya está definido, pasarás directamente a Iion Pay.</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted">Completa tus datos una sola vez y elige la forma de pago que te quede más fácil.</p>
       </div>
+      <div className="mb-6"><IionPaymentMethods /></div>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="rounded-2xl border border-hair bg-card p-4 shadow-sm sm:p-6">
           <div className="grid grid-cols-2 gap-3">
@@ -182,11 +183,10 @@ export default function CheckoutPage() {
             <div className="flex justify-between pt-2 text-base"><span>Productos</span><strong>{formatCOP(subtotal)}</strong></div>
           </div>
           <div className="flex justify-between border-b border-hair py-4 text-sm"><span>Envío</span><strong className="text-copper">{form.fulfillment === "PICKUP" ? "$ 0" : "Se calcula al confirmar"}</strong></div>
-          <div className="mt-4"><IionPaymentMethods /></div>
           <button type="button" onClick={submit} disabled={busy || !items.length} className="mt-5 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-copper px-5 font-bold text-white shadow-md transition hover:bg-copper-bright disabled:opacity-60">
-            {busy ? <><Loader2 className="animate-spin" size={19} /> Preparando pago…</> : <><CreditCard size={19} /> Continuar con iion pay</>}
+            {busy ? <><Loader2 className="animate-spin" size={19} /> Preparando pago…</> : <><CreditCard size={19} /> Elegir medio y pagar</>}
           </button>
-          <p className="mt-3 flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted"><LockKeyhole size={14} className="mt-0.5 shrink-0" /> El valor mínimo del cobro es $5.000. Elige el medio en la pasarela.</p>
+          <p className="mt-3 flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted"><LockKeyhole size={14} className="mt-0.5 shrink-0" /> El valor mínimo del cobro es $5.000. Al continuar podrás escoger cómo pagar.</p>
           <p className="mt-3 text-center text-[11px] leading-relaxed text-muted">El pedido se confirma cuando Iion notifica el pago aprobado. Si falta definir el envío, primero te mostraremos el pedido registrado.</p>
         </aside>
       </div>
