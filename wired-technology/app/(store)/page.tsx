@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "@/components/store/ProductCard";
 import { CustomerReviews } from "@/components/store/CustomerReviews";
+import { IionPaymentMethods } from "@/components/store/IionPaymentMethods";
 import { StoreTrustTicker } from "@/components/store/StoreTrustTicker";
 import { customerReviews } from "@/lib/customer-reviews";
 import { cableCatalogHref } from "@/lib/storefront-navigation";
@@ -76,7 +77,7 @@ export default async function HomePage() {
                 { icon: RefreshCcw, label: "Pedido", detail: "a tu medida" },
                 { icon: Truck, label: "Envío", detail: "cotizado" },
                 { icon: BadgeCheck, label: "Referencia", detail: "verificada" },
-                { icon: CreditCard, label: "Pago", detail: "con iion pay" },
+                { icon: CreditCard, label: "7 formas", detail: "para pagar" },
               ].map(({ icon: Icon, label, detail }) => <div key={label} className="flex aspect-square w-full max-w-[112px] flex-col items-center justify-center rounded-full border-[3px] border-double border-slate-dark/80 bg-white text-center text-ink shadow-sm">
                 <span className="text-[11px] font-bold uppercase tracking-[.08em]">{label}</span>
                 <Icon size={25} strokeWidth={1.4} className="my-1 text-copper sm:h-8 sm:w-8" aria-hidden="true" />
@@ -119,6 +120,12 @@ export default async function HomePage() {
       </section>
 
       <StoreTrustTicker />
+
+      <section className="border-b border-hair bg-[#F7F7F6]">
+        <div className="mx-auto max-w-[1180px] px-5 py-7 sm:py-9">
+          <IionPaymentMethods />
+        </div>
+      </section>
 
       <section className="border-b border-hair bg-white">
         <div className="mx-auto grid max-w-[1180px] grid-cols-1 divide-y divide-hair px-5 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
