@@ -18,7 +18,10 @@ export default function InventarioAdmin() {
   // Nota: ajuste de inventario requeriría un endpoint dedicado; por ahora es visual
   return (
     <div>
-      <h1 className="font-display text-xl font-bold mb-5">Inventario</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <h1 className="font-display text-xl font-bold">Inventario</h1>
+        <a href="/inventario-central" className="text-sm font-semibold underline">Abrir inventario central de Trefil</a>
+      </div>
       <div className="flex gap-3 mb-4">
         <div className="bg-card border border-hair rounded-lg px-4 py-2.5 flex items-center gap-2">
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-alert">{out}</span>
