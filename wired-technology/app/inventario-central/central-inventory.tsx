@@ -23,6 +23,7 @@ type Row = {
   variant?: string | null;
   unit?: string | null;
   reported?: number | null;
+  available_presentations?: number | null;
   code?: string | null;
   factor?: number | null;
   base_unit?: string | null;
@@ -31,6 +32,7 @@ type Row = {
 type Feed = {
   source: Source;
   evidence: string;
+  product_count?: number | null;
   last_success: string | null;
   last_error: string | null;
 };
@@ -346,7 +348,18 @@ export function CentralInventory() {
                 return (
                   <section key={key}>
                     <h2>{names[key]}</h2>
-                    <strong>{fmt.format(summary?.total ?? 0)}</strong>
+                    <strong>
+                      {fmt.format(
+                        key === "mastershop" && feed?.product_count != null
+                          ? feed.product_count
+                          : (summary?.total ?? 0),
+                      )}
+                    </strong>
+                    {key === "mastershop" && feed?.product_count != null && (
+                      <small>
+                        productos · {summary?.total ?? 0} presentaciones
+                      </small>
+                    )}
                     <p>
                       {method}
                       {feed?.last_success
@@ -508,6 +521,19 @@ export function CentralInventory() {
                                   : fmt.format(row.reported) +
                                     " " +
                                     (row.unit ?? "")}
+                              {row.available_presentations != null && (
+                                <small>
+                                  En bodegas con conteo:{" "}
+                                  {fmt.format(row.available_presentations)}{" "}
+                                  presentaciones disponibles
+                                  {row.reported != null &&
+                                    " · Diferencia frente al canal: " +
+                                      fmt.format(
+                                        row.available_presentations -
+                                          row.reported,
+                                      )}
+                                </small>
+                              )}
                             </td>
                             <td>
                               {source === "fisico" ? (
