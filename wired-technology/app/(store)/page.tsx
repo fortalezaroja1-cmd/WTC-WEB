@@ -23,7 +23,70 @@ import {
 
 export const revalidate = 60;
 
-export default async function HomePage() {
+type StorefrontSearchParams = {
+  categoria?: string | string[];
+  producto?: string | string[];
+  utm_campaign?: string | string[];
+  utm_content?: string | string[];
+};
+
+function getFirstParam(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
+
+function getHeroCopy(params: StorefrontSearchParams) {
+  const intent = [params.categoria, params.producto, params.utm_campaign, params.utm_content]
+    .map(getFirstParam)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/(cable|alambre|encauchetado|calibre)/.test(intent)) {
+    return {
+      eyebrow: "Cables y alambres para tu instalación",
+      title: "Encuentra el cable correcto para tu proyecto",
+      accent: "y compra sin perder tiempo.",
+      description: "Busca por calibre, marca o referencia. Compara precios con IVA incluido, arma tu pedido y confirma inventario y entrega antes de pagar.",
+      href: "/productos?q=cable",
+      cta: "Ver cables y alambres",
+    };
+  }
+
+  if (/(ilumin|bombill|lampar|reflector|led)/.test(intent)) {
+    return {
+      eyebrow: "Iluminación para hogares y proyectos",
+      title: "Encuentra la iluminación correcta para tu espacio",
+      accent: "con precio claro desde el inicio.",
+      description: "Compara referencias, consumo y presentación. Arma tu pedido con IVA incluido y confirma inventario y entrega antes de pagar.",
+      href: "/productos?q=iluminacion",
+      cta: "Ver iluminación",
+    };
+  }
+
+  if (/(accesorio|breaker|tablero|toma|interruptor|proteccion)/.test(intent)) {
+    return {
+      eyebrow: "Accesorios y protección eléctrica",
+      title: "Encuentra la referencia que necesitas",
+      accent: "y confirma tu pedido más rápido.",
+      description: "Busca por producto, marca o referencia. Revisa el precio con IVA incluido y confirma inventario y entrega antes de pagar.",
+      href: "/productos?q=accesorio",
+      cta: "Ver accesorios",
+    };
+  }
+
+  return {
+    eyebrow: "Material eléctrico con compra asistida",
+    title: "Encuentra el material eléctrico correcto",
+    accent: "y compra sin perder tiempo.",
+    description: "Busca por producto, calibre o referencia. Compara precios con IVA incluido, arma tu pedido y confirma inventario y entrega antes de pagar.",
+    href: "/productos",
+    cta: "Buscar mi producto",
+  };
+}
+
+export default async function HomePage({ searchParams }: { searchParams: Promise<StorefrontSearchParams> }) {
+  const heroCopy = getHeroCopy(await searchParams);
   const [categories, featuredProducts, publishedCount] = await Promise.all([
     prisma.category.findMany({
       where: { active: true },
@@ -56,18 +119,18 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-[1180px] items-center gap-8 px-5 py-10 sm:py-14 lg:grid-cols-[1.08fr_.92fr] lg:gap-12 lg:py-16">
           <div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-copper/25 bg-[#F7EBE2] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[.12em] text-copper">
-              <BadgeCheck size={15} /> Distribuidor de Centelsa y Mercury
+              <BadgeCheck size={15} /> {heroCopy.eyebrow}
             </div>
             <h1 className="max-w-[720px] font-display text-[36px] font-bold leading-[1.07] tracking-tight sm:text-5xl lg:text-[58px]">
-              Todo para tu proyecto eléctrico, <span className="text-copper">en un solo lugar.</span>
+              {heroCopy.title} <span className="text-copper">{heroCopy.accent}</span>
             </h1>
             <p className="mt-5 max-w-[590px] text-base leading-relaxed text-slate-dark sm:text-lg">
-              Encuentra tu referencia, arma el pedido y revisa el valor final antes de pagar. Te ayudamos con la disponibilidad y el envío.
+              {heroCopy.description}
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-4 sm:gap-6">
-              <Link href="/productos" className="inline-flex min-h-14 items-center justify-center rounded-full bg-[#191919] px-7 py-3 text-base font-bold text-white transition-colors hover:bg-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper">
-                Ver toda la tienda
+              <Link href={heroCopy.href} className="inline-flex min-h-14 items-center justify-center rounded-full bg-[#191919] px-7 py-3 text-base font-bold text-white transition-colors hover:bg-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper">
+                {heroCopy.cta}
               </Link>
               <a href="#opiniones" className="inline-flex min-h-12 items-center gap-2 border-b border-ink text-sm font-semibold hover:text-copper">Leer experiencias <ArrowRight size={17} aria-hidden="true" /></a>
             </div>
