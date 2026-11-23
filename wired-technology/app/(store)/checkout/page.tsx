@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  AlertCircle, ArrowLeft, Banknote, CheckCircle2, CreditCard, Loader2,
-  LockKeyhole, MessageCircle, Minus, PackageCheck, Plus, ShieldCheck,
+  AlertCircle, ArrowLeft, CheckCircle2, CreditCard, Loader2,
+  LockKeyhole, MessageCircle, Minus, PackageCheck, Plus,
   ShoppingCart, Store, Trash2, Truck,
 } from "lucide-react";
 import { useCart } from "@/components/store/CartProvider";
 import { CartProductSearch } from "@/components/store/CartProductSearch";
+import { IionPaymentMethods } from "@/components/store/IionPaymentMethods";
 import { formatCOP, getDiscountPricing, waLink } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
@@ -133,7 +134,7 @@ export default function CheckoutPage() {
         <a href={waLink(whatsapp, "Hola Wired Technology, necesito ayuda para pagar mi pedido.")} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-green underline underline-offset-4">¿Necesitas ayuda?</a>
       </div>
       <div className="mb-6">
-        <p className="font-mono text-xs font-bold uppercase tracking-[.16em] text-copper">Pago seguro</p>
+        <p className="text-xs font-semibold uppercase tracking-[.12em] text-copper">Pago seguro</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-graphite">Finaliza tu compra</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">Completa tus datos una sola vez. Si el total del envío ya está definido, pasarás directamente a Iion Pay.</p>
       </div>
@@ -181,15 +182,11 @@ export default function CheckoutPage() {
             <div className="flex justify-between pt-2 text-base"><span>Productos</span><strong>{formatCOP(subtotal)}</strong></div>
           </div>
           <div className="flex justify-between border-b border-hair py-4 text-sm"><span>Envío</span><strong className="text-copper">{form.fulfillment === "PICKUP" ? "$ 0" : "Se calcula al confirmar"}</strong></div>
-          <div className="mt-4 rounded-xl border border-blue/20 bg-blue-50 p-4">
-            <div className="flex items-center gap-2 font-bold text-graphite"><ShieldCheck size={19} className="text-blue" /> Iion Pay</div>
-            <p className="mt-2 text-xs leading-relaxed text-slate-dark">Disponibles hoy en tu cuenta: <strong>PSE y transferencia bancaria</strong>. Si Iion habilita nuevos medios, aparecerán automáticamente en la pasarela.</p>
-            <div className="mt-3 flex gap-2 text-xs text-muted"><Banknote size={16} className="shrink-0" /><span>Cobro en pesos colombianos. Valor mínimo de la pasarela: $5.000.</span></div>
-          </div>
+          <div className="mt-4"><IionPaymentMethods /></div>
           <button type="button" onClick={submit} disabled={busy || !items.length} className="mt-5 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-copper px-5 font-bold text-white shadow-md transition hover:bg-copper-bright disabled:opacity-60">
-            {busy ? <><Loader2 className="animate-spin" size={19} /> Preparando pago…</> : <><CreditCard size={19} /> Pagar seguro con Iion Pay</>}
+            {busy ? <><Loader2 className="animate-spin" size={19} /> Preparando pago…</> : <><CreditCard size={19} /> Continuar con iion pay</>}
           </button>
-          <p className="mt-3 flex items-start justify-center gap-1.5 text-center text-[11px] leading-relaxed text-muted"><LockKeyhole size={14} className="mt-0.5 shrink-0" /> Serás redirigido a Iion Pay. Wired no recibe tus claves ni datos bancarios.</p>
+          <p className="mt-3 flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted"><LockKeyhole size={14} className="mt-0.5 shrink-0" /> El valor mínimo del cobro es $5.000. Elige el medio en la pasarela.</p>
           <p className="mt-3 text-center text-[11px] leading-relaxed text-muted">El pedido se confirma cuando Iion notifica el pago aprobado. Si falta definir el envío, primero te mostraremos el pedido registrado.</p>
         </aside>
       </div>
