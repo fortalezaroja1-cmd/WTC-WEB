@@ -10,3 +10,9 @@
 - El envío debe formar parte del total antes de cobrar. Si no hay tarifa definida, se registra el pedido y se espera cotización.
 - El checkout es móvil primero, usa una sola acción principal y conserva WhatsApp únicamente como ayuda.
 - No usar testimonios, escasez, descuentos o condiciones que no estén respaldados por datos reales.
+
+## Cambios aplicados
+
+- 2026-11-23: Se reemplazó el headline genérico de inicio por una promesa orientada a resultado y se alinearon subtítulo y CTA con la intención de compra.
+- 2026-11-23: La portada adapta el primer pantallazo para campañas de cables, iluminación o accesorios mediante `categoria`, `producto`, `utm_campaign` o `utm_content`.
+- 2026-11-23: Se retiró del hero la afirmación general de distribución de marcas para evitar promesas no respaldadas.
