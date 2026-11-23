@@ -10,7 +10,7 @@ import {
 import { useCart } from "@/components/store/CartProvider";
 import { CartProductSearch } from "@/components/store/CartProductSearch";
 import { IionPaymentMethods } from "@/components/store/IionPaymentMethods";
-import { formatCOP, getDiscountPricing, waLink } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, getPublicPrice, waLink } from "@/lib/utils";
 import { trackMetaEvent } from "@/lib/meta-events";
 
 const INPUT = "min-h-12 w-full rounded-xl border border-hair bg-white px-3 py-2.5 text-base text-ink outline-none transition focus:border-copper focus:ring-2 focus:ring-copper/20";
@@ -18,6 +18,7 @@ const INPUT = "min-h-12 w-full rounded-xl border border-hair bg-white px-3 py-2.
 type FormState = {
   name: string; phone: string; email: string; city: string; barrio: string;
   address: string; reference: string; notes: string; fulfillment: "DELIVERY" | "PICKUP";
+  needsInvoice: boolean; invoiceName: string; invoiceDocument: string; invoiceEmail: string;
 };
 type ResultState = {
   orderNumber: string; orderId: string; requestId: string; subtotal: number;
@@ -26,7 +27,8 @@ type ResultState = {
 };
 const EMPTY_FORM: FormState = {
   name: "", phone: "", email: "", city: "", barrio: "", address: "",
-  reference: "", notes: "", fulfillment: "DELIVERY",
+  reference: "", notes: "", fulfillment: "DELIVERY", needsInvoice: false,
+  invoiceName: "", invoiceDocument: "", invoiceEmail: "",
 };
 
 export default function CheckoutPage() {
@@ -39,7 +41,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<ResultState | null>(null);
   const checkoutTracked = useRef(false);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = items.reduce((sum, item) => sum + getPublicPrice(item.price) * item.qty, 0);
   const originalTotal = items.reduce((sum, item) => sum + getDiscountPricing(item.price).original * item.qty, 0);
   const savings = Math.max(0, originalTotal - subtotal);
   const itemCount = items.reduce((sum, item) => sum + item.qty, 0);
@@ -74,7 +76,12 @@ export default function CheckoutPage() {
     const base = form.name.trim().length >= 2 && form.phone.replace(/\D/g, "").length >= 7 && form.city.trim().length >= 2;
     const emailValid = !form.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
     const addressValid = form.fulfillment === "PICKUP" || (form.barrio.trim().length >= 2 && form.address.trim().length >= 4);
-    return base && emailValid && addressValid;
+    const invoiceValid = !form.needsInvoice || (
+      form.invoiceName.trim().length >= 2 &&
+      form.invoiceDocument.replace(/\D/g, "").length >= 5 &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.invoiceEmail)
+    );
+    return base && emailValid && addressValid && invoiceValid;
   }, [form]);
 
   const openPayment = async (orderId: string, orderRequestId: string) => {
@@ -90,7 +97,9 @@ export default function CheckoutPage() {
 
   const submit = async () => {
     if (!items.length) return setError("Agrega al menos un producto.");
-    if (!valid) return setError("Revisa los campos obligatorios y el correo, si lo escribiste.");
+    if (!valid) return setError(form.needsInvoice
+      ? "Revisa los datos obligatorios de compra y facturación electrónica."
+      : "Revisa los campos obligatorios y el correo, si lo escribiste.");
     if (!requestId) return setError("Espera un momento y vuelve a intentarlo.");
     setBusy(true); setError("");
     try {
@@ -121,7 +130,7 @@ export default function CheckoutPage() {
     } finally { setBusy(false); }
   };
 
-  const update = (field: keyof FormState, value: string) => setForm(current => ({ ...current, [field]: value }));
+  const update = <K extends keyof FormState>(field: K, value: FormState[K]) => setForm(current => ({ ...current, [field]: value }));
   if (!items.length && !result) return <EmptyCart />;
   if (result) return <CheckoutResult result={result} whatsapp={whatsapp} busy={busy} error={error}
     onPay={async () => { setBusy(true); setError(""); try { await openPayment(result.orderId, result.requestId); } catch (payError) { setError(payError instanceof Error ? payError.message : "No pudimos abrir el pago."); } finally { setBusy(false); } }}
@@ -158,11 +167,33 @@ export default function CheckoutPage() {
             </>}
             <div className="sm:col-span-2"><Field label="Nota (opcional)"><textarea rows={2} className={INPUT} value={form.notes} onChange={event => update("notes", event.target.value)} /></Field></div>
           </div>
+
+          <section className="mt-6 rounded-2xl border-2 border-copper/30 bg-[#FFF9F3] p-4 sm:p-5" aria-labelledby="invoice-title">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.needsInvoice}
+                onChange={event => update("needsInvoice", event.target.checked)}
+                className="mt-0.5 h-6 w-6 shrink-0 accent-[#B86127]"
+              />
+              <span>
+                <strong id="invoice-title" className="block text-base text-graphite">Necesito factura electrónica</strong>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">Marca esta opción para registrar los datos que deben aparecer en tu factura.</span>
+              </span>
+            </label>
+            {form.needsInvoice && (
+              <div className="mt-5 grid gap-4 border-t border-copper/20 pt-5 sm:grid-cols-2">
+                <div className="sm:col-span-2"><Field label="Nombre o razón social *"><input autoComplete="organization" className={INPUT} value={form.invoiceName} onChange={event => update("invoiceName", event.target.value)} /></Field></div>
+                <Field label="Documento o NIT *"><input inputMode="numeric" className={INPUT} value={form.invoiceDocument} onChange={event => update("invoiceDocument", event.target.value)} placeholder="Incluye dígito de verificación si aplica" /></Field>
+                <Field label="Correo para la factura *"><input type="email" inputMode="email" autoComplete="email" className={INPUT} value={form.invoiceEmail} onChange={event => update("invoiceEmail", event.target.value)} /></Field>
+              </div>
+            )}
+          </section>
           <details className="mt-7 rounded-xl border border-hair bg-paper/60 p-4">
             <summary className="cursor-pointer font-bold text-graphite">Revisar {itemCount} {itemCount === 1 ? "producto" : "productos"}</summary>
             <div className="mt-3 divide-y divide-hair">
               {items.map((item, index) => <article key={`${item.productId}:${item.variantId || ""}`} className="flex items-center gap-2 py-3">
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{item.name}</p><p className="text-xs text-muted">{formatCOP(item.price)} c/u</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{item.name}</p><p className="text-xs text-muted">{formatCOP(getPublicPrice(item.price))} c/u · IVA incluido</p></div>
                 <button type="button" aria-label={`Quitar una unidad de ${item.name}`} onClick={() => updateQty(index, -1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-hair"><Minus size={16} /></button>
                 <strong className="w-5 text-center">{item.qty}</strong>
                 <button type="button" aria-label={`Agregar una unidad de ${item.name}`} onClick={() => updateQty(index, 1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-hair"><Plus size={16} /></button>
@@ -181,6 +212,7 @@ export default function CheckoutPage() {
             <div className="flex justify-between text-muted"><span>Precio antes del descuento</span><span className="line-through">{formatCOP(originalTotal)}</span></div>
             <div className="flex justify-between font-bold text-green"><span>Descuento aplicado</span><span>-{formatCOP(savings)}</span></div>
             <div className="flex justify-between pt-2 text-base"><span>Productos</span><strong>{formatCOP(subtotal)}</strong></div>
+            <div className="flex justify-between text-xs font-semibold text-slate-dark"><span>IVA (19%)</span><span>Incluido</span></div>
           </div>
           <div className="flex justify-between border-b border-hair py-4 text-sm"><span>Envío</span><strong className="text-copper">{form.fulfillment === "PICKUP" ? "$ 0" : "Se calcula al confirmar"}</strong></div>
           <button type="button" onClick={submit} disabled={busy || !items.length} className="mt-5 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-copper px-5 font-bold text-white shadow-md transition hover:bg-copper-bright disabled:opacity-60">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncLeadStageByPhone } from "@/lib/sales-agent";
+import { getPublicPrice, IVA_RATE } from "@/lib/utils";
 
 type OrderMeta = {
   requestId: string;
@@ -13,6 +14,11 @@ type OrderMeta = {
   shippingQuoted: boolean;
   fulfillment: "DELIVERY" | "PICKUP";
   paymentChoice: "IION" | "WHATSAPP" | "PAY_LATER";
+  invoiceRequested: boolean;
+  invoiceName: string | null;
+  invoiceDocument: string | null;
+  invoiceEmail: string | null;
+  vatRate: number;
 };
 
 function buildNotes(meta: OrderMeta, visibleNotes: string) {
@@ -47,6 +53,10 @@ export async function POST(req: NextRequest) {
     const requestId = String(body.requestId || "").trim().slice(0, 100);
     const origin = cleanOrigin(body.origin);
     const fulfillment = body.fulfillment === "PICKUP" ? "PICKUP" : "DELIVERY";
+    const invoiceRequested = customer?.needsInvoice === true;
+    const invoiceName = String(customer?.invoiceName || "").trim().slice(0, 180);
+    const invoiceDocument = String(customer?.invoiceDocument || "").trim().slice(0, 50);
+    const invoiceEmail = String(customer?.invoiceEmail || "").trim().toLowerCase().slice(0, 180);
     const paymentChoice = ["IION", "WHATSAPP", "PAY_LATER"].includes(body.paymentChoice)
       ? body.paymentChoice as OrderMeta["paymentChoice"]
       : "WHATSAPP";
@@ -56,6 +66,12 @@ export async function POST(req: NextRequest) {
       (fulfillment === "DELIVERY" && (!customer?.address || !customer?.barrio))
     ) {
       return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+    }
+    if (invoiceRequested && (
+      invoiceName.length < 2 || invoiceDocument.replace(/\D/g, "").length < 5 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmail)
+    )) {
+      return NextResponse.json({ error: "Completa correctamente los datos para la factura electrónica" }, { status: 400 });
     }
     if (items.length > 100) return NextResponse.json({ error: "El pedido supera el máximo de referencias" }, { status: 400 });
 
@@ -89,8 +105,9 @@ export async function POST(req: NextRequest) {
       if (!variantId && product.variants.length) throw new Error("VARIANT_REQUIRED");
       const stock = variant ? variant.stock : product.stock;
       if (stock < qty) throw new Error("INSUFFICIENT_STOCK");
-      const price = Number(variant ? variant.price : product.price);
-      if (!Number.isFinite(price) || price <= 0) throw new Error("INVALID_PRICE");
+      const netPrice = Number(variant ? variant.price : product.price);
+      if (!Number.isFinite(netPrice) || netPrice <= 0) throw new Error("INVALID_PRICE");
+      const price = getPublicPrice(netPrice);
       return {
         name: variant ? `${product.name} · ${variant.name}` : product.name,
         sku: variant?.sku || product.sku,
@@ -177,6 +194,11 @@ export async function POST(req: NextRequest) {
         fulfillment === "DELIVERY" && customer.barrio ? `Barrio: ${customer.barrio}` : null,
         fulfillment === "DELIVERY" && customer.reference ? `Referencia de entrega: ${customer.reference}` : null,
         customer.notes ? `Observaciones del cliente: ${customer.notes}` : null,
+        "Precios de productos con IVA (19%) incluido",
+        invoiceRequested ? "Factura electrónica solicitada: Sí" : "Factura electrónica solicitada: No",
+        invoiceRequested ? `Nombre o razón social: ${invoiceName}` : null,
+        invoiceRequested ? `Documento o NIT: ${invoiceDocument}` : null,
+        invoiceRequested ? `Correo de facturación: ${invoiceEmail}` : null,
       ].filter(Boolean).join("\n");
 
       const meta: OrderMeta = {
@@ -190,6 +212,11 @@ export async function POST(req: NextRequest) {
         shippingQuoted,
         fulfillment,
         paymentChoice,
+        invoiceRequested,
+        invoiceName: invoiceRequested ? invoiceName : null,
+        invoiceDocument: invoiceRequested ? invoiceDocument : null,
+        invoiceEmail: invoiceRequested ? invoiceEmail : null,
+        vatRate: IVA_RATE,
       };
 
       const paymentMethod = paymentChoice === "IION"
@@ -219,7 +246,7 @@ export async function POST(req: NextRequest) {
             })),
           },
           history: { create: {
-            action: `Solicitud web · Origen: ${origin} · ${shippingQuoted ? `Envío definido $${Math.round(shipping).toLocaleString("es-CO")}` : "Envío por cotizar"} · Pago ${paymentMethod}`,
+            action: `Solicitud web · Origen: ${origin} · IVA incluido · ${invoiceRequested ? "Factura solicitada" : "Sin factura solicitada"} · ${shippingQuoted ? `Envío definido $${Math.round(shipping).toLocaleString("es-CO")}` : "Envío por cotizar"} · Pago ${paymentMethod}`,
             actor: "cliente",
           } },
         },
@@ -249,6 +276,8 @@ export async function POST(req: NextRequest) {
       subtotal,
       shipping,
       total,
+      vatIncluded: true,
+      vatRate: IVA_RATE,
     });
   } catch (error: any) {
     if (error?.message === "INSUFFICIENT_STOCK") {

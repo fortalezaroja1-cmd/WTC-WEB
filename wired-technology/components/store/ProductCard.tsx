@@ -54,6 +54,7 @@ export function ProductCard({ slug, name, sku, brand, image, price, hasVariants,
             <div className="text-xs text-muted mb-1">{hasVariants ? "desde" : `por ${unit}`}</div>
             <div className="text-sm text-muted line-through decoration-alert/70">{formatCOP(offer.original)}</div>
             <div className="font-display text-xl sm:text-2xl font-bold text-copper">{formatCOP(offer.current)}</div>
+            <div className="mt-1 text-[11px] font-semibold text-slate-dark">IVA incluido</div>
             <div className="mt-1 text-xs font-bold text-green">Te ahorras {formatCOP(offer.savings)}</div>
           </div>
           {totalStock <= 0 ? (

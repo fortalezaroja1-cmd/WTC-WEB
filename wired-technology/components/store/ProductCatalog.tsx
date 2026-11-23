@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Download, LoaderCircle, Package, Plus, Search, SlidersHorizontal, ShoppingCart } from "lucide-react";
-import { formatCOP, getDiscountPricing } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, getPublicPrice } from "@/lib/utils";
 import { useCart } from "@/components/store/CartProvider";
 import { trackMetaEvent } from "@/lib/meta-events";
 
@@ -120,7 +120,7 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
       content_ids: [product.sku],
       content_type: "product",
       content_name: product.name,
-      value: product.price,
+      value: getPublicPrice(product.price),
       currency: "COP",
       num_items: 1,
     });
@@ -208,11 +208,11 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
         doc.setTextColor(198, 123, 66);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(13);
-        doc.text(formatCOP(product.price), x + 6, y + cardHeight - 8);
+        doc.text(formatCOP(getPublicPrice(product.price)), x + 6, y + cardHeight - 8);
         doc.setTextColor(107, 116, 128);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6.8);
-        doc.text(product.hasVariants ? "Precio desde" : `Por ${product.unit}`, x + cardWidth - 6, y + cardHeight - 8, { align: "right" });
+        doc.text(product.hasVariants ? "Desde · IVA incluido" : `Por ${product.unit} · IVA incluido`, x + cardWidth - 6, y + cardHeight - 8, { align: "right" });
         setProgress(i + 1);
       }
       doc.save("Catalogo-Wired-Technology.pdf");
@@ -294,6 +294,7 @@ export function ProductCatalog({ products, initialQuery = "" }: Props) {
                       <div className="text-xs text-muted mb-1">{product.hasVariants ? "Precio desde" : `Precio por ${product.unit}`}</div>
                       <div className="text-sm text-muted line-through decoration-alert/70">{formatCOP(offer.original)}</div>
                       <div className="font-display text-2xl font-bold text-copper">{formatCOP(offer.current)}</div>
+                      <div className="mt-1 text-[11px] font-semibold text-slate-dark">IVA incluido</div>
                       <div className="mt-1 text-xs font-bold text-green">Te ahorras {formatCOP(offer.savings)}</div>
                     </div>
                     <span className={`text-sm font-semibold ${product.totalStock <= 0 ? "text-alert" : "text-green"}`}>

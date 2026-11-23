@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, Minus, Plus, ShoppingCart, Trash2, X } from "lucide-react";
-import { formatCOP, getDiscountPricing } from "@/lib/utils";
+import { formatCOP, getDiscountPricing, getPublicPrice } from "@/lib/utils";
 import { CartProductSearch } from "@/components/store/CartProductSearch";
 
 export interface CartItem {
@@ -169,7 +169,7 @@ export function CartProvider({
 function CartDrawer() {
   const { items, addItem, removeItem, updateQty, setOpen, recommendations } = useCart();
   const [showProductSearch, setShowProductSearch] = useState(false);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = items.reduce((sum, item) => sum + getPublicPrice(item.price) * item.qty, 0);
   const originalTotal = items.reduce((sum, item) => sum + getDiscountPricing(item.price).original * item.qty, 0);
   const discountSavings = Math.max(0, originalTotal - subtotal);
   const drawerRecommendations = useMemo(
@@ -211,7 +211,8 @@ function CartDrawer() {
                 <p className="font-semibold text-base leading-snug">{item.name}</p>
                 <p className="text-xs text-muted mt-1">Referencia: {item.sku}</p>
                 <p className="mt-1 text-xs text-muted line-through">Antes {formatCOP(getDiscountPricing(item.price).original * item.qty)}</p>
-                <p className="text-sm font-bold text-copper">Ahora {formatCOP(item.price * item.qty)}</p>
+                <p className="text-sm font-bold text-copper">Ahora {formatCOP(getPublicPrice(item.price) * item.qty)}</p>
+                <p className="text-[11px] font-semibold text-slate-dark">IVA incluido</p>
                 <div className="flex gap-2 items-center mt-2">
                   <button type="button" aria-label={"Quitar una unidad de " + item.name} onClick={() => updateQty(index, -1)} className="h-11 w-11 border border-hair rounded-lg flex items-center justify-center"><Minus size={18}/></button>
                   <span className="font-bold min-w-7 text-center text-base">{item.qty}</span>
@@ -239,6 +240,7 @@ function CartDrawer() {
             <div className="flex justify-between text-sm text-muted mb-1"><span>Antes del descuento</span><span className="line-through">{formatCOP(originalTotal)}</span></div>
             <div className="flex justify-between text-sm text-green mb-2"><span>Ahorro aplicado (30%)</span><strong>-{formatCOP(discountSavings)}</strong></div>
             <div className="flex justify-between text-base mb-1"><span>Total de productos</span><strong>{formatCOP(subtotal)}</strong></div>
+            <p className="text-xs font-semibold text-slate-dark mb-1">IVA (19%) incluido</p>
             <p className="text-sm text-muted mb-3">El costo de envío se confirma por WhatsApp.</p>
             <Link href="/checkout" onClick={() => setOpen(false)}
               className="w-full min-h-14 rounded-xl bg-green text-white flex items-center justify-center text-base font-bold text-center px-4">
