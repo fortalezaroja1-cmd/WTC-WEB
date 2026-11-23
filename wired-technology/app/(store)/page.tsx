@@ -3,18 +3,21 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ProductCard } from "@/components/store/ProductCard";
 import { CustomerReviews } from "@/components/store/CustomerReviews";
+import { StoreTrustTicker } from "@/components/store/StoreTrustTicker";
+import { customerReviews } from "@/lib/customer-reviews";
 import { cableCatalogHref } from "@/lib/storefront-navigation";
 import {
   ArrowRight,
   BadgeCheck,
   ChevronRight,
   CircleDollarSign,
+  CreditCard,
   MessageCircle,
-  PackageCheck,
-  Search,
+  RefreshCcw,
   ShieldCheck,
   ShoppingCart,
   Star,
+  Truck,
 } from "lucide-react";
 
 export const revalidate = 60;
@@ -41,50 +44,60 @@ export default async function HomePage() {
 
   const cableHref = cableCatalogHref(categories);
   const heroProduct = featuredProducts.find((product) => product.images[0]?.url);
+  const featuredReview = customerReviews.find((review) => review.publicationApproved && review.image);
   const whatsappUrl = `https://wa.me/573143506623?text=${encodeURIComponent(
     "Hola Wired Technology, necesito ayuda para elegir una referencia y cotizar mi pedido.",
   )}`;
 
   return (
     <>
-      <section className="relative overflow-hidden bg-graphite text-white">
-        <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(circle_at_75%_25%,#C67B42_0,transparent_34%)]" />
-        <div className="relative z-10 mx-auto grid max-w-[1180px] items-center gap-10 px-5 py-10 sm:py-16 lg:grid-cols-[1.08fr_.92fr] lg:py-20">
+      <section className="relative overflow-hidden bg-[#F7F7F6] text-ink">
+        <div className="mx-auto grid max-w-[1180px] items-center gap-8 px-5 py-10 sm:py-14 lg:grid-cols-[1.08fr_.92fr] lg:gap-12 lg:py-16">
           <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-copper/40 bg-copper/10 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[.14em] text-copper-bright">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-copper/25 bg-[#F7EBE2] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[.12em] text-copper">
               <BadgeCheck size={15} /> Distribuidor de Centelsa y Mercury
             </div>
-            <h1 className="max-w-[720px] font-display text-[34px] font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[58px]">
-              Compra el material eléctrico correcto <span className="text-copper-bright">sin perder tiempo buscando referencias.</span>
+            <h1 className="max-w-[720px] font-display text-[36px] font-bold leading-[1.07] tracking-tight sm:text-5xl lg:text-[58px]">
+              Todo para tu proyecto eléctrico, <span className="text-copper">en un solo lugar.</span>
             </h1>
-            <p className="mt-5 max-w-[610px] text-base leading-relaxed text-white/78 sm:text-lg">
-              Busca por calibre, nombre o SKU, compara precios y arma tu pedido. Confirmamos disponibilidad y envío para que pagues el valor final de forma segura con iion pay.
+            <p className="mt-5 max-w-[590px] text-base leading-relaxed text-slate-dark sm:text-lg">
+              Encuentra tu referencia, arma el pedido y revisa el valor final antes de pagar. Te ayudamos con la disponibilidad y el envío.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link href="/productos" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-copper px-6 py-3 text-base font-bold text-white transition-colors hover:bg-copper-bright">
-                Encontrar mi referencia <Search size={19} />
+            <div className="mt-7 flex flex-wrap items-center gap-4 sm:gap-6">
+              <Link href="/productos" className="inline-flex min-h-14 items-center justify-center rounded-full bg-[#191919] px-7 py-3 text-base font-bold text-white transition-colors hover:bg-copper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-copper">
+                Ver toda la tienda
               </Link>
-              <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border border-white/25 px-6 py-3 text-base font-semibold text-white transition-colors hover:border-copper hover:text-copper-bright">
-                Pedir asesoría <MessageCircle size={19} />
-              </a>
+              <a href="#opiniones" className="inline-flex min-h-12 items-center gap-2 border-b border-ink text-sm font-semibold hover:text-copper">Leer experiencias <ArrowRight size={17} aria-hidden="true" /></a>
             </div>
 
-            <div className="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/72">
-              <span className="inline-flex items-center gap-2"><CircleDollarSign size={18} className="text-copper-bright" /> Precios visibles en COP</span>
-              <span className="inline-flex items-center gap-2"><PackageCheck size={18} className="text-copper-bright" /> Disponibilidad confirmada antes de pagar</span>
+            <div className="mt-7 grid max-w-[520px] grid-cols-2 justify-items-center gap-3 sm:grid-cols-4 sm:gap-4" aria-label="Cómo compramos en Wired">
+              {[
+                { icon: RefreshCcw, label: "Pedido", detail: "a tu medida" },
+                { icon: Truck, label: "Envío", detail: "cotizado" },
+                { icon: BadgeCheck, label: "Referencia", detail: "verificada" },
+                { icon: CreditCard, label: "Pago", detail: "con iion pay" },
+              ].map(({ icon: Icon, label, detail }) => <div key={label} className="flex aspect-square w-full max-w-[112px] flex-col items-center justify-center rounded-full border-[3px] border-double border-slate-dark/80 bg-white text-center text-ink shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-[.08em]">{label}</span>
+                <Icon size={25} strokeWidth={1.4} className="my-1 text-copper sm:h-8 sm:w-8" aria-hidden="true" />
+                <span className="px-1 text-[10px] font-semibold uppercase tracking-[.03em]">{detail}</span>
+              </div>)}
             </div>
+            {featuredReview && <a href="#opiniones" className="mt-7 flex max-w-[490px] items-center gap-3 rounded-xl py-1 hover:text-copper">
+              <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-hair bg-white"><img src={featuredReview.image} alt="" className="absolute -left-2 -top-1 w-[200px] max-w-none" /></span>
+              <span className="min-w-0"><span className="block text-sm font-semibold leading-snug">“{featuredReview.comment}”</span><span className="mt-1 block text-xs text-muted">{featuredReview.displayName} · Cliente de Wired Technology</span></span>
+            </a>}
           </div>
 
           <div className="relative mx-auto w-full max-w-[520px]">
             <div className="absolute -inset-5 rounded-[36px] bg-copper/10 blur-2xl" />
-            <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white p-5 shadow-2xl">
+            <div className="relative overflow-hidden rounded-[28px] border border-hair bg-white p-5 shadow-xl">
               <div className="flex items-center justify-between gap-4 border-b border-hair pb-4">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[.14em] text-muted">Catálogo disponible</p>
                   <p className="mt-1 font-display text-2xl font-bold text-ink">{publishedCount} referencias</p>
                 </div>
-                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green">Compra asistida</span>
+                <span className="rounded-full bg-[#F7EBE2] px-3 py-1 text-xs font-semibold text-copper">Compra asistida</span>
               </div>
               <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-2xl bg-[#F8F5F0]">
                 {heroProduct?.images[0]?.url ? (
@@ -104,6 +117,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <StoreTrustTicker />
 
       <section className="border-b border-hair bg-white">
         <div className="mx-auto grid max-w-[1180px] grid-cols-1 divide-y divide-hair px-5 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
