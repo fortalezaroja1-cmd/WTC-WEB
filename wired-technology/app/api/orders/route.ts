@@ -1,9 +1,11 @@
+import { applyStoreBalances, centralStockEnabled, TrefiStockError } from "@/lib/trefi-stock";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncLeadStageByPhone } from "@/lib/sales-agent";
 import { getPublicPrice, IVA_RATE } from "@/lib/utils";
 
 type OrderMeta = {
+  inventorySource?: string;
   requestId: string;
   origin: string;
   assignedSellerId: string | null;
@@ -46,6 +48,16 @@ async function nextOrderNumber(tx: any) {
   return `WT-${String(max + 1).padStart(6, "0")}`;
 }
 
+const existingOrderSelect = { id:true, number:true, subtotal:true, shipping:true, total:true, notes:true } as const;
+type StoredOrder = {id:string;number:string;notes:string|null;subtotal:unknown;shipping:unknown;total:unknown};
+function duplicateResponse(order:StoredOrder) {
+  const details=order.notes?.match(/\[WT_META\]([\s\S]*?)\[\/WT_META\]/)?.[1] ?? "{}";
+  let shippingQuoted=false;
+  try {shippingQuoted=JSON.parse(details).shippingQuoted===true;} catch {}
+  return NextResponse.json({orderNumber:order.number,orderId:order.id,duplicate:true,shippingQuoted,paymentReady:shippingQuoted,
+    subtotal:Number(order.subtotal),shipping:Number(order.shipping),total:Number(order.total),vatIncluded:true,vatRate:IVA_RATE});
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -75,6 +87,12 @@ export async function POST(req: NextRequest) {
     }
     if (items.length > 100) return NextResponse.json({ error: "El pedido supera el máximo de referencias" }, { status: 400 });
 
+    if (centralStockEnabled() && requestId.length<20) return NextResponse.json({error:"Actualiza el carrito para obtener un identificador de pedido."},{status:400});
+    const requestFilter = {notes:{contains:'"requestId":'+JSON.stringify(requestId)},customer:{phone:customer.phone}};
+    if (requestId) {
+      const previous=await prisma.order.findFirst({where:requestFilter,select:existingOrderSelect});
+      if (previous) return duplicateResponse(previous);
+    }
     const productIds = [...new Set(items.map((item: any) => String(item.productId || "")).filter(Boolean))];
     if (productIds.length !== new Set(items.map((item: any) => String(item.productId || ""))).size) {
       return NextResponse.json({ error: "Hay productos sin identificar" }, { status: 400 });
@@ -94,6 +112,7 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+    await applyStoreBalances(products, true);
     const productById = new Map(products.map(product => [product.id, product]));
     const validatedItems = items.map((item: any) => {
       const product = productById.get(String(item.productId || ""));
@@ -133,30 +152,12 @@ export async function POST(req: NextRequest) {
     const shipping = pickup || freeDelivery ? 0 : hasDeliveryRate ? configuredShipping : 0;
     const total = subtotal + shipping;
 
-    // Idempotencia: si el navegador reintenta exactamente la misma solicitud, devolvemos la orden ya creada.
-    if (requestId) {
-      const existingOrder = await prisma.order.findFirst({
-        where: { notes: { contains: requestId } },
-        select: { id: true, number: true },
-      });
-      if (existingOrder) {
-        const duplicate = await prisma.order.findUnique({ where: { id: existingOrder.id } });
-        const duplicateMeta = duplicate?.notes?.match(/\[WT_META\]([\s\S]*?)\[\/WT_META\]/)?.[1];
-        let duplicateShippingQuoted = false;
-        try { duplicateShippingQuoted = JSON.parse(duplicateMeta || "{}").shippingQuoted === true; } catch {}
-        return NextResponse.json({
-          orderNumber: existingOrder.number,
-          orderId: existingOrder.id,
-          duplicate: true,
-          subtotal: Number(duplicate?.subtotal || subtotal),
-          shipping: Number(duplicate?.shipping || 0),
-          total: Number(duplicate?.total || subtotal),
-          paymentReady: duplicateShippingQuoted,
-        });
+    const saved = await prisma.$transaction(async (tx) => {
+      if (requestId) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"wired-checkout:"+requestId},0))`;
+        const previous=await tx.order.findFirst({where:requestFilter,select:existingOrderSelect});
+        if (previous)return {order:previous,duplicate:true};
       }
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
       let dbCustomer = await tx.customer.findFirst({ where: { phone: customer.phone } });
       const customerNotes = [
         fulfillment === "PICKUP" ? "Modalidad: Recoger en tienda" : "Modalidad: Entrega a domicilio",
@@ -202,6 +203,7 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join("\n");
 
       const meta: OrderMeta = {
+        inventorySource: centralStockEnabled() ? "trefi" : undefined,
         requestId,
         origin,
         assignedSellerId: null,
@@ -259,8 +261,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return order;
+      return {order,duplicate:false};
     });
+    if (saved.duplicate) return duplicateResponse(saved.order);
+    const result=saved.order;
 
     try {
       await syncLeadStageByPhone(customer.phone, "SCHEDULED", `Pedido ${result.number} creado · envío pendiente de cotización`);
@@ -280,6 +284,7 @@ export async function POST(req: NextRequest) {
       vatRate: IVA_RATE,
     });
   } catch (error: any) {
+    if (error instanceof TrefiStockError) return NextResponse.json({error:error.message},{status:error.status});
     if (error?.message === "INSUFFICIENT_STOCK") {
       return NextResponse.json({ error: "La disponibilidad cambió. Revisa las cantidades e inténtalo de nuevo." }, { status: 409 });
     }

@@ -1,3 +1,4 @@
+import { centralStockEnabled, reserveInTrefi, TrefiStockError } from "@/lib/trefi-stock";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createIionCollect } from "@/lib/iion";
@@ -22,13 +23,17 @@ export async function POST(req: NextRequest) {
     if (typeof orderId !== "string" || typeof requestId !== "string" || requestId.length < 20 || requestId.length > 100) {
       return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
     }
-    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { customer: true } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { customer: true, items: true } });
     const metaText = order?.notes?.match(/\[WT_META\]([\s\S]*?)\[\/WT_META\]/)?.[1];
-    let meta: { requestId?: string; shippingQuoted?: boolean; stockValidated?: boolean } = {};
+    let meta: { requestId?: string; shippingQuoted?: boolean; stockValidated?: boolean; inventorySource?: string; inventoryApplied?: boolean } = {};
     try { meta = JSON.parse(metaText || "{}"); } catch {}
     if (!order || meta.requestId !== requestId || !metaText) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
     if (order.paymentStatus === "APPROVED") return NextResponse.json({ error: "Este pedido ya está pagado" }, { status: 409 });
     if (!meta.shippingQuoted || !meta.stockValidated) return NextResponse.json({ error: "Estamos confirmando inventario y costo final de entrega. Te avisaremos cuando puedas pagar." }, { status: 409 });
+    if (order.shipStatus === "CANCELLED") return NextResponse.json({error:"Este pedido está cancelado."},{status:409});
+    if (meta.inventorySource === "trefi" || (centralStockEnabled() && !meta.inventoryApplied)) {
+      await reserveInTrefi(order.number,order.items);
+    }
     if (order.iionCollectUrl && order.iionExpiresAt && order.iionExpiresAt > new Date()) {
       return NextResponse.json({ collectUrl: order.iionCollectUrl, amount: Number(order.total) });
     }
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
     } });
     return NextResponse.json({ collectUrl: payment.collectUrl, amount });
   } catch (error) {
+    if (error instanceof TrefiStockError) return NextResponse.json({error:error.message},{status:error.status});
     const code = error instanceof Error ? error.message : "";
     return NextResponse.json({ error: code === "IION_NOT_CONFIGURED" ? "El pago en línea aún no está disponible. Escríbenos por WhatsApp." : "No pudimos preparar el pago. Inténtalo de nuevo." }, { status: 503 });
   }

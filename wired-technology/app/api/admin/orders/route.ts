@@ -1,9 +1,11 @@
+import { centralStockEnabled, finishInTrefi, offerId, orderInTrefi, readAvailable, reserveInTrefi, TrefiStockError } from "@/lib/trefi-stock";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 
 type OrderMeta = {
+  inventorySource?: string;
   requestId: string;
   origin: string;
   assignedSellerId: string | null;
@@ -49,9 +51,18 @@ function enrich(order: any) {
   return { ...order, workflow: meta, publicNotes };
 }
 
-function getAvailability(order: any) {
+function usesCentral(meta: OrderMeta) {
+  return meta.inventorySource === "trefi" || (centralStockEnabled() && !meta.inventoryApplied);
+}
+
+async function getAvailability(order: any) {
+  const {meta}=parseNotes(order.notes);
+  const central=usesCentral(meta);
+  const ids: string[]=central ? order.items.map(offerId) : [];
+  const [balances, reservation]=central ? await Promise.all([readAvailable(ids),orderInTrefi(order.number)]) : [{},null] as const;
+  const held=new Map<string,number>(reservation?.state==="reserved" ? reservation.lines.map(line=>[line.id,line.quantity] as const) : []);
   return order.items.map((it: any) => {
-    const available = it.variantId
+    const available = central ? ((balances as Record<string,number|null>)[offerId(it)] ?? 0)+(held.get(offerId(it))??0) : it.variantId
       ? it.variant?.stock
       : it.productId
         ? it.product?.stock
@@ -126,7 +137,7 @@ export async function PUT(req: NextRequest) {
           { status: 404 },
         );
 
-      const availability = getAvailability(current);
+      const availability = await getAvailability(current);
       const shortages = availability.filter((x: any) => !x.ok);
       const { meta, publicNotes: visible } = parseNotes(current.notes);
 
@@ -195,7 +206,11 @@ export async function PUT(req: NextRequest) {
 
         const parsed = parseNotes(current.notes);
         const meta = parsed.meta;
-        const availability = getAvailability(current);
+        if (current.shipStatus === "CANCELLED") throw new TrefiStockError("El pedido está cancelado.",409);
+        const central = usesCentral(meta);
+        if (central && !meta.inventoryApplied) await reserveInTrefi(current.number,current.items);
+        if (central) meta.inventorySource="trefi";
+        const availability = central ? [] : await getAvailability(current);
         const shortages = availability.filter((x: any) => !x.ok);
 
         if (!meta.inventoryApplied && shortages.length) {
@@ -204,7 +219,7 @@ export async function PUT(req: NextRequest) {
           throw err;
         }
 
-        if (!meta.inventoryApplied) {
+        if (!meta.inventoryApplied && !central) {
           for (const it of current.items) {
             if (it.variantId) {
               await tx.variant.update({
@@ -271,7 +286,7 @@ export async function PUT(req: NextRequest) {
           },
         });
         return updated;
-      });
+      }, { timeout: 12000 });
 
       await writeAudit({
         actorUserId: session.userId,
@@ -357,7 +372,17 @@ export async function PUT(req: NextRequest) {
       historyEntries.push(`Envío cotizado: $${Math.round(quotedShipping).toLocaleString("es-CO")}`);
     }
 
-    if (shipStatus === "CANCELLED" && meta.inventoryApplied) {
+    const central=usesCentral(meta);
+    if (central && (shipStatus==="SHIPPED" || shipStatus==="DELIVERED")) {
+      await finishInTrefi(current.number,"dispatch");
+    }
+    if (central && shipStatus==="CANCELLED") {
+      await finishInTrefi(current.number,"cancel");
+      meta.inventorySource="trefi";
+      meta.inventoryApplied=false;
+      meta.stockValidated=false;
+    }
+    if (shipStatus === "CANCELLED" && meta.inventoryApplied && !central) {
       const cancelled = await prisma.$transaction(async (tx) => {
         for (const it of current.items) {
           if (it.variantId) {
@@ -464,6 +489,7 @@ export async function PUT(req: NextRequest) {
     });
     return NextResponse.json(enrich(order));
   } catch (error: any) {
+    if (error instanceof TrefiStockError) return NextResponse.json({error:error.message},{status:error.status});
     if (error?.message === "NOT_FOUND")
       return NextResponse.json(
         { error: "Pedido no encontrado" },

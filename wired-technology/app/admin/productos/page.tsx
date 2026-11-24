@@ -5,11 +5,14 @@ import { formatCOP } from "@/lib/utils";
 
 export default function ProductosAdmin() {
   const [products, setProducts] = useState<any[]>([]);
+  const [central, setCentral] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
 
   useEffect(() => { loadProducts(); }, []);
 
-  const loadProducts = () => fetch("/api/admin/products").then((r) => r.json()).then(setProducts);
+  const loadProducts = () => fetch("/api/admin/products").then(async r => {
+    if(r.ok) {setCentral(r.headers.get("X-Trefi-Stock")==="central");setProducts(await r.json());}
+  });
 
   const deleteProduct = async (id: string) => {
     if (!confirm("¿Eliminar este producto?")) return;
@@ -18,7 +21,7 @@ export default function ProductosAdmin() {
   };
 
   if (editing) return (
-    <ProductForm product={editing === "new" ? null : editing}
+    <ProductForm central={central} product={editing === "new" ? null : editing}
       onCancel={() => setEditing(null)}
       onSaved={() => { setEditing(null); loadProducts(); }} />
   );
@@ -81,7 +84,7 @@ export default function ProductosAdmin() {
   );
 }
 
-function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCancel: () => void; onSaved: () => void }) {
+function ProductForm({ central, product, onCancel, onSaved }: { central: boolean; product: any | null; onCancel: () => void; onSaved: () => void }) {
   const isNew = !product;
   const [f, setF] = useState({
     name: product?.name || "", sku: product?.sku || "WT-", slug: product?.slug || "",
@@ -149,16 +152,17 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
     const body = {
       ...f,
       ...(isNew ? {} : { id: product.id }),
-      variants: variants.map(({ id, productId, createdAt, updatedAt, ...v }: any) => v),
+      variants: variants.map(({ id, productId, createdAt, updatedAt, ...v }: any) => central && id ? {...v,id} : v),
       specs: specs.map(({ id, productId, ...s }: any) => s),
       images: images.map(({ id, productId, createdAt, order, ...img }: any) => img),
     };
-    await fetch("/api/admin/products", {
+    const res = await fetch("/api/admin/products", {
       method: isNew ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     setSaving(false);
+    if(!res.ok) {const error=await res.json();alert(error.error || "No se pudo guardar el producto.");return;}
     onSaved();
   };
 
@@ -187,7 +191,7 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
         {variants.length === 0 && (
           <div className="grid grid-cols-2 gap-4 bg-paper rounded-lg p-4">
             <div><label className="text-xs font-semibold text-slate-dark block mb-1">Precio</label><input type="number" value={f.price} onChange={(e) => set("price", +e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
-            <div><label className="text-xs font-semibold text-slate-dark block mb-1">Stock</label><input type="number" value={f.stock} onChange={(e) => set("stock", +e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
+            <div><label className="text-xs font-semibold text-slate-dark block mb-1">{central ? "Disponible en Trefi" : "Stock"}</label><input disabled={central} type="number" value={f.stock} onChange={(e) => set("stock", +e.target.value)} className="w-full border border-hair rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-copper" /></div>
           </div>
         )}
 
@@ -266,7 +270,7 @@ function ProductForm({ product, onCancel, onSaved }: { product: any | null; onCa
                 <div><label className="text-[10px] font-semibold text-muted block mb-0.5">Nombre</label><input value={v.name} onChange={(e) => { const u = [...variants]; u[i] = { ...u[i], name: e.target.value }; setVariants(u); }} className="w-full border border-hair rounded px-2 py-1.5 text-xs focus:outline-none focus:border-copper" /></div>
                 <div><label className="text-[10px] font-semibold text-muted block mb-0.5">SKU</label><input value={v.sku} onChange={(e) => { const u = [...variants]; u[i] = { ...u[i], sku: e.target.value }; setVariants(u); }} className="w-full border border-hair rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-copper" /></div>
                 <div><label className="text-[10px] font-semibold text-muted block mb-0.5">Precio</label><input type="number" value={v.price} onChange={(e) => { const u = [...variants]; u[i] = { ...u[i], price: +e.target.value }; setVariants(u); }} className="w-full border border-hair rounded px-2 py-1.5 text-xs focus:outline-none focus:border-copper" /></div>
-                <div><label className="text-[10px] font-semibold text-muted block mb-0.5">Stock</label><input type="number" value={v.stock} onChange={(e) => { const u = [...variants]; u[i] = { ...u[i], stock: +e.target.value }; setVariants(u); }} className="w-full border border-hair rounded px-2 py-1.5 text-xs focus:outline-none focus:border-copper" /></div>
+                <div><label className="text-[10px] font-semibold text-muted block mb-0.5">{central ? "Disponible en Trefi" : "Stock"}</label><input disabled={central} type="number" value={v.stock} onChange={(e) => { const u = [...variants]; u[i] = { ...u[i], stock: +e.target.value }; setVariants(u); }} className="w-full border border-hair rounded px-2 py-1.5 text-xs focus:outline-none focus:border-copper" /></div>
                 <button onClick={() => setVariants((prev) => prev.filter((_, k) => k !== i))} className="text-alert p-2"><Trash2 size={14} /></button>
               </div>
             ))}

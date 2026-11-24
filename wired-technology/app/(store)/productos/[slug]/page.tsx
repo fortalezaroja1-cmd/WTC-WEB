@@ -1,3 +1,4 @@
+import { applyStoreBalances } from "@/lib/trefi-stock";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -6,6 +7,8 @@ import { AddToCart } from "@/components/store/AddToCart";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ProductGallery } from "@/components/store/ProductGallery";
 import { ProductViewTracker } from "@/components/store/ProductViewTracker";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -32,6 +35,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ slug:
       take: 3,
     }),
   ]);
+  await applyStoreBalances([product, ...relatedProducts]);
 
   const cfg: Record<string, string> = {};
   settings.forEach((setting) => (cfg[setting.key] = setting.value));
