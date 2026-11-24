@@ -1,5 +1,8 @@
+import { applyStoreBalances } from "@/lib/trefi-stock";
 import { prisma } from "@/lib/db";
 import { ProductCatalog } from "@/components/store/ProductCatalog";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProductosPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const params = await searchParams;
@@ -10,11 +13,12 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
     include: {
       brand: true,
       category: true,
-      variants: true,
+      variants: { where: { active: true } },
       images: { orderBy: { order: "asc" }, take: 1 },
     },
     orderBy: [{ featured: "desc" }, { name: "asc" }],
   });
+  await applyStoreBalances(products);
 
   const catalogProducts = products.map((product) => {
     const hasVariants = product.variants.length > 0;

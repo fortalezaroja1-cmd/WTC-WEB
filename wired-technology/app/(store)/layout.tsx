@@ -1,3 +1,5 @@
+import { applyStoreBalances, centralStockEnabled } from "@/lib/trefi-stock";
+import { StockRefresh } from "@/components/store/StockRefresh";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { CartProvider, type CartRecommendation } from "@/components/store/CartProvider";
@@ -6,6 +8,8 @@ import { MessageCircle } from "lucide-react";
 import WiredAssistant from "@/components/WiredAssistant";
 import { MetaPixelConsent, CookiePreferencesButton } from "@/components/store/MetaPixelConsent";
 import { PromotionPopup, type EntryPromotion } from "@/components/store/PromotionPopup";
+
+export const dynamic = "force-dynamic";
 
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const [categories, settings, recommendationProducts] = await Promise.all([
@@ -38,6 +42,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       },
     }),
   ]);
+  const inventoryStatus = await applyStoreBalances(recommendationProducts);
 
   const cfg: Record<string, string> = {};
   settings.forEach((s) => (cfg[s.key] = s.value));
@@ -122,7 +127,11 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   return (
     <CartProvider whatsapp={whatsapp} recommendations={recommendations}>
+      {centralStockEnabled() && <StockRefresh />}
       <MetaPixelConsent />
+      {inventoryStatus !== "ready" && <p role="status" className="px-4 py-2 text-center text-sm">
+        {inventoryStatus === "offline" ? "Estamos verificando existencias con la bodega. Los pedidos se confirman cuando se restablezca la consulta." : "Las referencias pendientes de conteo se habilitarán cuando bodega confirme sus existencias."}
+      </p>}
       {entryPromotion && (
         <PromotionPopup
           promotion={entryPromotion}

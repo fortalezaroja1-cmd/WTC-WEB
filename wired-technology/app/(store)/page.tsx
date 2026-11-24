@@ -1,3 +1,4 @@
+import { applyStoreBalances } from "@/lib/trefi-stock";
 import Image from "next/image";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
@@ -21,7 +22,7 @@ import {
   Truck,
 } from "lucide-react";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 type StorefrontSearchParams = {
   categoria?: string | string[];
@@ -105,6 +106,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     }),
     prisma.product.count({ where: { status: "PUBLISHED" } }),
   ]);
+  await applyStoreBalances(featuredProducts);
 
   const cableHref = cableCatalogHref(categories);
   const heroProduct = featuredProducts.find((product) => product.images[0]?.url);

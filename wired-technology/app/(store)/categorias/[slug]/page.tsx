@@ -1,8 +1,11 @@
+import { applyStoreBalances } from "@/lib/trefi-stock";
 import { prisma } from "@/lib/db";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ProductCard } from "@/components/store/ProductCard";
+
+export const dynamic = "force-dynamic";
 
 export default async function CategoriaPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -17,9 +20,10 @@ export default async function CategoriaPage({ params }: { params: Promise<{ slug
 
   const products = await prisma.product.findMany({
     where: { categoryId: category.id, status: "PUBLISHED" },
-    include: { brand: true, variants: true, images: { orderBy: { order: "asc" }, take: 1 } },
+    include: { brand: true, variants: { where: { active: true } }, images: { orderBy: { order: "asc" }, take: 1 } },
     orderBy: [{ featured: "desc" }, { name: "asc" }],
   });
+  await applyStoreBalances(products);
 
   return (
     <div className="max-w-[1380px] mx-auto px-5 py-7">
