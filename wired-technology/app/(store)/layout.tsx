@@ -1,4 +1,5 @@
-import { applyStoreBalances } from "@/lib/trefi-stock";
+import { applyStoreBalances, centralStockEnabled } from "@/lib/trefi-stock";
+import { StockRefresh } from "@/components/store/StockRefresh";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { CartProvider, type CartRecommendation } from "@/components/store/CartProvider";
@@ -126,6 +127,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   return (
     <CartProvider whatsapp={whatsapp} recommendations={recommendations}>
+      {centralStockEnabled() && <StockRefresh />}
       <MetaPixelConsent />
       {inventoryStatus !== "ready" && <p role="status" className="px-4 py-2 text-center text-sm">
         {inventoryStatus === "offline" ? "Estamos verificando existencias con la bodega. Los pedidos se confirman cuando se restablezca la consulta." : "Las referencias pendientes de conteo se habilitarán cuando bodega confirme sus existencias."}

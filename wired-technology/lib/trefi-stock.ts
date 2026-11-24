@@ -25,6 +25,7 @@ type ChannelOrder = {
   lines: { id: string; quantity: number }[];
 };
 type Reply = {
+  version?: string;
   available?: Record<string, number | null>;
   state?: string;
   order?: ChannelOrder | null;
@@ -151,4 +152,15 @@ export async function orderInTrefi(
       503,
     );
   return result.order;
+}
+
+export async function stockVersion() {
+  const { version } = await requestStock({ action: "version" });
+  if (typeof version !== "string" || !/^[0-9a-f]{32}$/.test(version)) {
+    throw new TrefiStockError(
+      "No se pudo verificar la versión de inventario.",
+      503,
+    );
+  }
+  return version;
 }
